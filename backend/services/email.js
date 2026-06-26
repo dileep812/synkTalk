@@ -74,19 +74,31 @@ const sendEmailViaGmailAPI = async (to, fromName, subject, text, html) => {
     return response.data;
 };
 
-export const sendEmailOTP = async (email, otp) => {
-    const subject = 'SyncTalk - Your Verification Code';
-    const text = `Your 6-digit verification code is: ${otp}. It will expire in 5 minutes.`;
+export const sendEmailOTP = async (email, username, otp, otpId) => {
+    const subject = `[${otpId}] SyncTalk - Your Verification Code`;
+    const text = `Hello ${username},\n\nYour 6-digit verification code is: ${otp} (Reference ID: ${otpId}). It will expire in 5 minutes.`;
+    
     const html = `
-        <div style="font-family: sans-serif; padding: 20px; border: 1px solid #eee; border-radius: 10px; max-width: 500px;">
-            <h2 style="color: #4A90E2;">SyncTalk Verification</h2>
-            <p>Your 6-digit verification code is:</p>
-            <p style="font-size: 24px; font-weight: bold; letter-spacing: 2px; color: #333; background: #f4f4f4; padding: 10px; display: inline-block; border-radius: 5px;">${otp}</p>
-            <p style="font-size: 14px; color: #666;">It will expire in 5 minutes.</p>
+        <div style="font-family: sans-serif; padding: 25px; border: 1px solid #e0e0e0; border-radius: 12px; max-width: 450px; background-color: #ffffff; box-shadow: 0 4px 6px rgba(0,0,0,0.02);">
+            <h2 style="color: #4A90E2; margin-top: 0; font-size: 20px;">SyncTalk Verification</h2>
+            <p style="color: #555; font-size: 15px;">Hello <strong>${username}</strong>,</p>
+            <p style="color: #555; font-size: 14px;">Use the verification code below to complete your request. Please ensure the Reference ID matches the one shown on your screen.</p>
+            
+            <div style="margin: 15px 0 5px 0; font-size: 12px; color: #888; text-transform: uppercase; letter-spacing: 1px;">
+                Reference ID: <strong style="color: #333; background: #eef2f7; padding: 2px 6px; border-radius: 4px;">${otpId}</strong>
+            </div>
+
+            <div style="font-size: 28px; font-weight: bold; letter-spacing: 4px; color: #2C3E50; background: #f8f9fa; padding: 12px 20px; display: inline-block; border-radius: 8px; border: 1px solid #eaeded; margin-bottom: 10px;">
+                ${otp}
+            </div>
+            
+            <p style="font-size: 13px; color: #e74c3c; margin-top: 10px;">⏰ This code is uniquely tied to ID <b>${otpId}</b> and will expire in 5 minutes.</p>
+            <hr style="border: 0; border-top: 1px solid #f0f0f0; margin: 20px 0;" />
+            <p style="font-size: 11px; color: #999; line-height: 1.4;">If you did not request this code, please ignore this email or update your account security parameters.</p>
         </div>
     `;
 
-    return await sendEmailViaGmailAPI(email, 'SyncTalk', subject, text, html);
+    return await sendEmailViaGmailAPI(email, 'SyncTalk Verification', subject, text, html);
 };
 
 
@@ -125,6 +137,5 @@ export const sendDeploymentSuccessEmail = async () => {
             <hr style="border: 0; border-top: 1px solid #eee;" />
         </div>
     `;
-
     return await sendEmailViaGmailAPI('dileep.y23@iiits.in', 'SyncTalk System', subject, text, html);
 };
