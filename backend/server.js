@@ -8,7 +8,9 @@ import MongoStore from 'connect-mongo';
 import { connectDB } from './config/db.js';
 import {sendDeploymentSuccessEmail} from "./services/email.js"
 
-import authRouter from "./routes/auth.js";
+import authRouter from "./routes/authRouters.js";
+import userRouter from "./routes/userRoutes.js"
+import requestRouter from "./routes/requestRoutes.js"
 
 const app=express()
 const PORT=process.env.PORT || 3000
@@ -50,5 +52,8 @@ app.use(session({
 
 
 app.use("/auth",authRouter);
+app.use("/users",userRouter);
+app.use("/request",requestRouter);
+
 // sendDeploymentSuccessEmail()
 app.listen(PORT,()=>console.log(`the server is started at ${PORT}`))

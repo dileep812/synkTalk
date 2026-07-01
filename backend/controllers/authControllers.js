@@ -81,7 +81,7 @@ export const requestOtp = async (req, res) => {
 
         // 🌟 3. Initialize Persistent Logged-In Session Memory block
         req.session.user = {
-            id: userProfile._id,
+            id: userProfile._id.toString(),
             email: userProfile.email,
             username: userProfile.username,
             profileImage: userProfile.profileImage
