@@ -1,6 +1,4 @@
 import 'dotenv/config'
-import path from 'path';
-import { fileURLToPath } from 'url';
 
 import express from "express"
 import { createServer } from 'http';
@@ -9,7 +7,6 @@ import cors from 'cors';
 import MongoStore from 'connect-mongo';
 
 import { connectDB } from './config/db.js';
-import {sendDeploymentSuccessEmail} from "./services/email.js"
 import {initSocket,getIO} from "./io.js";
 import { setupSockets } from './sockets/index.js';
 
@@ -19,6 +16,20 @@ import requestRouter from "./routes/requestRoutes.js"
 import messageRouter from "./routes/messageRoutes.js"
 
 const app=express()
+
+// Enable trust proxy so that secure cookies (HTTPS) can be set
+app.set('trust proxy', 1);
+
+// Local Development HTTPS Spoofing:
+// If we are running the backend locally under HTTP, we must spoof the connection as HTTPS
+// to allow the browser to accept and send cross-site session cookies from your deployed Vercel frontend.
+if (process.env.NODE_ENV !== 'production') {
+    app.use((req, res, next) => {
+        req.headers['x-forwarded-proto'] = 'https';
+        next();
+    });
+}
+
 const PORT=process.env.PORT || 5000
 const DATABASE_URL=process.env.DATABASE_URL
 const http=createServer(app)
@@ -45,8 +56,10 @@ const sessionMiddleware=session({
     cookie: {
         maxAge: 24 * 60 * 60 * 1000,
         httpOnly: true,
-        secure: process.env.NODE_ENV === 'production' ,// Set to true if you use HTTPS later
-        sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax' // 5. Cross-origin cookie handling
+        // Always set secure: true and sameSite: 'none' to allow cross-site cookie flow
+        // from your deployed Vercel frontend to your local backend.
+        secure: true,
+        sameSite: 'none'
     }
 })
 app.use(sessionMiddleware);
@@ -56,25 +69,11 @@ app.use("/users",userRouter);
 app.use("/request",requestRouter);
 app.use("/messages",messageRouter);
 
-// Serve static assets in production
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-
-if (process.env.NODE_ENV === 'production') {
-    const distPath = path.join(__dirname, '../frontend/dist');
-    app.use(express.static(distPath));
-
-    // Redirect all non-API GET requests to React's index.html
-    app.get('*', (req, res) => {
-        res.sendFile(path.join(distPath, 'index.html'));
+app.get("/", (req, res) => {
+   res.json({
+        success: true,
+        message: "SyncTalk Backend is Running 🚀"
     });
-} else {
-    app.get("/", (req, res) => {
-       res.json({
-            success: true,
-            message: "SyncTalk Backend is Running 🚀"
-        });
-    });
-}
+});
 
 http.listen(PORT,()=>console.log(`the server is started at ${PORT}`))
