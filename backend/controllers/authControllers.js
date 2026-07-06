@@ -16,6 +16,7 @@ export const requestOtp = async (req, res) => {
     if (!email) return res.status(400).json({ error: 'Email is required' });
 
     const lowerEmail = email.toLowerCase();
+    console.log(`[Auth Controller | requestOtp] OTP request initiated for Email: ${lowerEmail}`);
 
     // 1. Generate a 6-digit random code and a 3-character reference ID
     const otp = Math.floor(100000 + Math.random() * 900000).toString();
@@ -39,6 +40,7 @@ export const requestOtp = async (req, res) => {
         await sendEmailOTP(lowerEmail, emailGreetingName, otp, otpId);
         
         // 🌟 4. Return the otpId back to the frontend so your UI can display it
+        console.log(`[Auth Controller | requestOtp] OTP dispatched successfully to: ${lowerEmail} | otpId: ${otpId}`);
         res.json({ 
             message: 'OTP successfully dispatched to your email address!',
             otpId: otpId 
@@ -53,6 +55,7 @@ export const requestOtp = async (req, res) => {
     if (!email || !otp) return res.status(400).json({ error: 'Email and OTP are required.' });
 
     const lowerEmail = email.toLowerCase();
+    console.log(`[Auth Controller | verifyOtp] Verifying OTP for Email: ${lowerEmail} | OTP Code: ${otp} | Username (Registration): ${username || 'N/A'}`);
     
     // 🌟 1. Grab the OTP data out of the current user's session vault
     const sessionOtpData = req.session.otpData;
@@ -90,6 +93,7 @@ export const requestOtp = async (req, res) => {
         // 🌟 4. Wipe out the single-use OTP data structure out of the session vault
         delete req.session.otpData;
 
+        console.log(`[Auth Controller | verifyOtp] OTP verified successfully. User logged in: ${userProfile._id} (${userProfile.username})`);
         res.json({ success: true, user: req.session.user });
 
     } catch (error) {
@@ -98,14 +102,21 @@ export const requestOtp = async (req, res) => {
     }
 };
 export const getMe = (req, res) => {
+       console.log(`[Auth Controller | getMe] Checking auth session for User: ${req.session.user?.username || 'Guest'}`);
        return res.json({ authenticated: true, user: req.session.user });
    
 };
 
 export const logout = (req, res) => {
+    const username = req.session?.user?.username || 'Unknown User';
+    console.log(`[Auth Controller | logout] Terminating session for User: ${username}`);
     req.session.destroy((err) => {
-        if (err) return res.status(500).json({ error: 'Could not log out' });
+        if (err) {
+            console.error(`[Auth Controller | logout] Session destruction failed for User: ${username}. Error:`, err);
+            return res.status(500).json({ error: 'Could not log out' });
+        }
         res.clearCookie('connect.sid');
+        console.log(`[Auth Controller | logout] Session terminated cleanly for User: ${username}`);
         res.json({ success: true, message: 'Session terminated.' });
     });
 };
