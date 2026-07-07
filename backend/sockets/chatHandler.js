@@ -20,7 +20,7 @@ export const registerChatHandlers = (io, socket) => {
                 status: isRecipientOnline ? "delivered" : "sent",
                 timestamp: new Date()
             });
-            await newMessage.save();
+             newMessage.save();
 
             if (isRecipientOnline) {
                 // 2. Real-time emit to the receiver's personal ID room

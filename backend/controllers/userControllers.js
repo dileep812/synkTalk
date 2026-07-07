@@ -1,6 +1,7 @@
 // backend/controllers/userControllers.js
 import User from '../models/user.js';
 import Request from '../models/Request.js';
+import Message from '../models/Message.js';
 
 /**
  * Performs a global directory search (excluding self), paginated, and cross-references
@@ -129,13 +130,23 @@ const requests = await Request.find({
         { recipient: myId }
     ]
 }).populate('sender recipient', 'username email profileImage');
-        // 3. Map requests to format peer user details with relationship metadata
-        const friendsList = requests.map(reqDoc => {
+        // 3. Map requests to format peer user details with relationship metadata and unread counts
+        const friendsList = await Promise.all(requests.map(async reqDoc => {
             const isSender = reqDoc.sender._id.toString() === myId.toString();
             const peerUser = isSender ? reqDoc.recipient : reqDoc.sender;
 
             // Handle edge case where a referenced user might be deleted from the database
             if (!peerUser) return null;
+
+            // CAPPED UNREAD MESSAGE QUERY: Fetch at most 10 unread items (Optimization constraint)
+            const unreadItems = await Message.find({
+                sender: peerUser._id,
+                recipient: myId,
+                status: { $ne: 'read' }
+            })
+            .select('_id')
+            .limit(10)
+            .lean();
 
             return {
                 _id: peerUser._id,
@@ -146,15 +157,18 @@ const requests = await Request.find({
                     status: reqDoc.status, // 'pending' or 'accepted'
                     requestId: reqDoc._id,
                     amISender: isSender
-                }
+                },
+                unreadCount: unreadItems.length // Length is at most 10
             };
-        }).filter(Boolean); // Filter out any null entries from deleted users
+        }));
+
+        const filteredFriendsList = friendsList.filter(Boolean); // Filter out any null entries from deleted users
 
         // 4. Return structured response
-        console.log(`[User Controller | getMyFriends] Friends list loaded for User: ${myId} | Count: ${friendsList.length}`);
+        console.log(`[User Controller | getMyFriends] Friends list loaded for User: ${myId} | Count: ${filteredFriendsList.length}`);
         return res.json({
             success: true,
-            friends: friendsList
+            friends: filteredFriendsList
         });
 
     } catch (error) {
@@ -162,3 +176,86 @@ const requests = await Request.find({
         return res.status(500).json({ error: 'Failed to retrieve friends list.' });
     }
 };
+
+export const updateProfile = async (req, res) => {
+    try {
+      const currentUserId = req.session.user.id; // Pulled safely from session store context
+      const { username, profileImage, email } = req.body;
+
+      // Build an atomic collection patch payload map dynamically
+      const updatePayload = {};
+
+      // 1. Process Username Update
+      if (username !== undefined) {
+        if (!username.trim()) {
+          return res.status(400).json({ success: false, error: "Username cannot be empty." });
+        }
+        updatePayload.username = username.trim();
+      }
+
+      // 2. Process Profile Picture Update
+      if (profileImage !== undefined) {
+        updatePayload.profileImage = profileImage.trim();
+      }
+
+      // 3. Process Email Update (Strict Uniqueness Evaluation Validation)
+      if (email !== undefined) {
+        const normalizedEmail = email.toLowerCase().trim();
+        
+        if (!normalizedEmail) {
+          return res.status(400).json({ success: false, error: "Email parameter cannot be empty." });
+        }
+
+        // Search if the target email is already claimed by another user record
+        const emailOwner = await User.findOne({ email: normalizedEmail });
+        
+        if (emailOwner && emailOwner._id.toString() !== currentUserId) {
+          return res.status(409).json({ 
+            success: false, 
+            error: "This email address is already registered to another active account." 
+          });
+        }
+        
+        updatePayload.email = normalizedEmail;
+      }
+
+      // Guard check: If the request body was empty or missing valid keys
+      if (Object.keys(updatePayload).length === 0) {
+        return res.status(400).json({ success: false, error: "No modifiable profile update fields were provided." });
+      }
+
+      // 4. Persist updates using validation hooks to protect model schemas
+      const updatedUser = await User.findByIdAndUpdate(
+        currentUserId,
+        { $set: updatePayload },
+        { new: true, runValidators: true } // 'new: true' returns the freshly modified database file entry
+      ).lean();
+
+      if (!updatedUser) {
+        return res.status(404).json({ success: false, error: "User profile record not found." });
+      }
+
+      // 5. Synchronize local server memory states (Refresh session cache)
+      req.session.user.username = updatedUser.username;
+      req.session.user.email = updatedUser.email;
+      req.session.user.profileImage = updatedUser.profileImage;
+
+      return res.status(200).json({
+        success: true,
+        message: "Profile workspace customized successfully.",
+        user: {
+          id: updatedUser._id,
+          username: updatedUser.username,
+          email: updatedUser.email,
+          profileImage: updatedUser.profileImage
+        }
+      });
+
+    } catch (error) {
+      console.error('[User Controller] updateProfile Error:', error);
+      return res.status(500).json({ 
+        success: false, 
+        error: "Internal server error encountered while patching user settings profiles." 
+      });
+    }
+  }

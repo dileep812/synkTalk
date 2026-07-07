@@ -17,13 +17,19 @@ import messageRouter from "./routes/messageRoutes.js"
 
 const app=express()
 
-// Enable trust proxy so that secure cookies (HTTPS) can be set
-app.set('trust proxy', 1);
+const isProduction = process.env.NODE_ENV === 'production';
+const isSecureClient = process.env.CLIENT_URL && process.env.CLIENT_URL.startsWith('https://');
+const useSecureCookies = isProduction || isSecureClient;
+
+// Enable trust proxy so secure cookies (HTTPS) are correctly set when behind load balancers
+if (useSecureCookies) {
+    app.set('trust proxy', 1);
+}
 
 // Local Development HTTPS Spoofing:
-// If we are running the backend locally under HTTP, we must spoof the connection as HTTPS
-// to allow the browser to accept and send cross-site session cookies from your deployed Vercel frontend.
-if (process.env.NODE_ENV !== 'production') {
+// If we are running the backend locally under HTTP but connecting to a secure deployed origin (like Vercel),
+// we must spoof the connection as HTTPS to allow the browser to accept and send cross-site session cookies.
+if (!isProduction && useSecureCookies) {
     app.use((req, res, next) => {
         req.headers['x-forwarded-proto'] = 'https';
         next();
@@ -56,10 +62,9 @@ const sessionMiddleware=session({
     cookie: {
         maxAge: 24 * 60 * 60 * 1000,
         httpOnly: true,
-        // Always set secure: true and sameSite: 'none' to allow cross-site cookie flow
-        // from your deployed Vercel frontend to your local backend.
-        secure: true,
-        sameSite: 'none'
+        // Set secure and sameSite dynamically based on the environment and client origin type
+        secure: useSecureCookies,
+        sameSite: useSecureCookies ? 'none' : 'lax'
     }
 })
 app.use(sessionMiddleware);

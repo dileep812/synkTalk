@@ -35,7 +35,6 @@ export const requestOtp = async (req, res) => {
             otpId: otpId,
             expiresAt: Date.now() + 5 * 60 * 1000 
         };
-
         // 🌟 3. Trigger the email dispatcher with the required parameters
         await sendEmailOTP(lowerEmail, emailGreetingName, otp, otpId);
         
@@ -56,10 +55,9 @@ export const requestOtp = async (req, res) => {
 
     const lowerEmail = email.toLowerCase();
     console.log(`[Auth Controller | verifyOtp] Verifying OTP for Email: ${lowerEmail} | OTP Code: ${otp} | Username (Registration): ${username || 'N/A'}`);
-    
+   
     // 🌟 1. Grab the OTP data out of the current user's session vault
     const sessionOtpData = req.session.otpData;
-
     // 🌟 2. Validate session existence, email match, code match, and expiration timestamp
     if (
         !sessionOtpData || 
