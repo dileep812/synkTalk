@@ -11,9 +11,12 @@ import { io } from 'socket.io-client';
 const SOCKET_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000';
 
 function ChatDashboardView({ user, onLogout, isSubmitting }) {
+  const [socket] = useState(() => io(SOCKET_URL, {
+    withCredentials: true,
+    autoConnect: true
+  }));
   const [currentView, setCurrentView] = useState('messages');
   const [hasUnread, setHasUnread] = useState(false);
-  const socketRef = useRef(null);
 
   const {
     searchInput,
@@ -42,25 +45,18 @@ function ChatDashboardView({ user, onLogout, isSubmitting }) {
     }
   }, [currentView]);
 
-  // Establish persistent socket connection on view mount
+  // Establish persistent socket event listeners on mount
   useEffect(() => {
-    socketRef.current = io(SOCKET_URL, {
-      withCredentials: true,
-      autoConnect: true
-    });
-
-    socketRef.current.on('message:received', (message) => {
+    socket.on('message:received', (message) => {
       if (currentViewRef.current !== 'messages') {
         setHasUnread(true);
       }
     });
 
     return () => {
-      if (socketRef.current) {
-        socketRef.current.disconnect();
-      }
+      socket.disconnect();
     };
-  }, []);
+  }, [socket]);
 
   return (
     <div className="flex h-screen w-screen overflow-hidden bg-slate-100">
@@ -77,7 +73,7 @@ function ChatDashboardView({ user, onLogout, isSubmitting }) {
       {/* Main content pane */}
       <div className="flex-1 h-full overflow-hidden flex flex-col">
         {currentView === 'messages' ? (
-          <ChatWorkspace user={user} parentSocket={socketRef.current} />
+          <ChatWorkspace user={user} parentSocket={socket} />
         ) : currentView === 'settings' ? (
           <ProfileSettingsTab />
         ) : (
