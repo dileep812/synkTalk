@@ -69,6 +69,13 @@ const removeConnectionRequest=async(friendId)=>{
   })
 }
 
+const updateProfile = async ({ username, profileImage, email }) => {
+  return apiRequest('/users/update', {
+    method: 'PATCH',
+    body: JSON.stringify({ username, profileImage, email }),
+  })
+}
+
 export {
   getFriends,
   searchUsers,
@@ -76,4 +83,5 @@ export {
   handleConnectionRequest,
   withdrawConnectionRequest,
   removeConnectionRequest,
+  updateProfile,
 }

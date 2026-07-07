@@ -102,10 +102,19 @@ export function useChatWorkspace({ user, parentSocket }) {
     fetchMessages();
   }, [activeFriend]);
 
-  // Reset typing state and cleanup timeout on active friend change
+  // Reset typing state, reset active friend unread count, and cleanup timeout on active friend change
   useEffect(() => {
     setIsFriendTyping(false);
     shouldScrollToBottomRef.current = true;
+
+    if (activeFriend) {
+      setFriends((prevFriends) =>
+        prevFriends.map((friend) =>
+          friend._id === activeFriend._id ? { ...friend, unreadCount: 0 } : friend
+        )
+      );
+    }
+
     return () => {
       if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
     };
@@ -123,6 +132,20 @@ export function useChatWorkspace({ user, parentSocket }) {
         setMessages((prev) => [...prev, newMessage]);
         // Emit read receipt immediately since we are viewing this chat actively
         socketRef.current.emit('message:read_receipt', { chatWithUserId: activeFriend._id });
+      } else {
+        // Increment unread count for this sender in the friends list (capping at 10)
+        setFriends((prevFriends) =>
+          prevFriends.map((friend) => {
+            if (friend._id === senderId) {
+              const currentUnread = friend.unreadCount || 0;
+              return {
+                ...friend,
+                unreadCount: Math.min(10, currentUnread + 1)
+              };
+            }
+            return friend;
+          })
+        );
       }
     };
 

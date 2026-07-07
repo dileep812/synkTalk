@@ -1,7 +1,7 @@
 import React from 'react';
-import { MessageSquare, Users, LogOut, MessageCircle } from 'lucide-react';
+import { MessageSquare, Users, LogOut, MessageCircle, User, Search, Inbox } from 'lucide-react';
 
-function Sidebar({ currentView, setCurrentView, hasUnread, user, onLogout }) {
+function Sidebar({ currentView, setCurrentView, hasUnread, pendingCount, user, onLogout }) {
   return (
     <aside className="w-64 bg-slate-900 text-slate-100 flex flex-col h-screen border-r border-slate-800 shrink-0">
       {/* Brand Logo Header */}
@@ -21,20 +21,7 @@ function Sidebar({ currentView, setCurrentView, hasUnread, user, onLogout }) {
 
       {/* Navigation Links */}
       <nav className="flex-1 px-4 py-6 space-y-2">
-        {/* Dashboard/Connections Button */}
-        <button
-          onClick={() => setCurrentView('dashboard')}
-          className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-semibold tracking-wide transition-all duration-200 ${
-            currentView === 'dashboard'
-              ? 'bg-cyan-600 text-white shadow-md shadow-cyan-600/10'
-              : 'text-slate-400 hover:bg-slate-800/60 hover:text-slate-200'
-          }`}
-        >
-          <Users className="h-5 w-5" />
-          <span>Connections</span>
-        </button>
-
-        {/* Messages Button */}
+        {/* 1. Messages Button */}
         <button
           onClick={() => setCurrentView('messages')}
           className={`w-full flex items-center justify-between px-4 py-3 rounded-xl text-sm font-semibold tracking-wide transition-all duration-200 ${
@@ -56,25 +43,90 @@ function Sidebar({ currentView, setCurrentView, hasUnread, user, onLogout }) {
             </span>
           )}
         </button>
+
+        {/* 2. Global Search Button */}
+        <button
+          onClick={() => setCurrentView('search')}
+          className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-semibold tracking-wide transition-all duration-200 ${
+            currentView === 'search'
+              ? 'bg-cyan-600 text-white shadow-md shadow-cyan-600/10'
+              : 'text-slate-400 hover:bg-slate-800/60 hover:text-slate-200'
+          }`}
+        >
+          <Search className="h-5 w-5" />
+          <span>Global Search</span>
+        </button>
+
+        {/* 3. Pending Requests Button */}
+        <button
+          onClick={() => setCurrentView('requests')}
+          className={`w-full flex items-center justify-between px-4 py-3 rounded-xl text-sm font-semibold tracking-wide transition-all duration-200 ${
+            currentView === 'requests'
+              ? 'bg-cyan-600 text-white shadow-md shadow-cyan-600/10'
+              : 'text-slate-400 hover:bg-slate-800/60 hover:text-slate-200'
+          }`}
+        >
+          <div className="flex items-center gap-3">
+            <Inbox className="h-5 w-5" />
+            <span>Pending Requests</span>
+          </div>
+
+          {/* Conditional Pending Requests Count Badge */}
+          {pendingCount > 0 && (
+            <span className="px-2 py-0.5 text-xs font-bold text-white bg-rose-500 rounded-full">
+              {pendingCount}
+            </span>
+          )}
+        </button>
+
+        {/* 4. My Connections Button */}
+        <button
+          onClick={() => setCurrentView('connections')}
+          className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-semibold tracking-wide transition-all duration-200 ${
+            currentView === 'connections'
+              ? 'bg-cyan-600 text-white shadow-md shadow-cyan-600/10'
+              : 'text-slate-400 hover:bg-slate-800/60 hover:text-slate-200'
+          }`}
+        >
+          <Users className="h-5 w-5" />
+          <span>My Connections</span>
+        </button>
+
+        {/* 5. My Profile Button */}
+        <button
+          onClick={() => setCurrentView('settings')}
+          className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-semibold tracking-wide transition-all duration-200 ${
+            currentView === 'settings'
+              ? 'bg-cyan-600 text-white shadow-md shadow-cyan-600/10'
+              : 'text-slate-400 hover:bg-slate-800/60 hover:text-slate-200'
+          }`}
+        >
+          <User className="h-5 w-5" />
+          <span>My Profile</span>
+        </button>
       </nav>
 
       {/* User Session Info Footer */}
       <div className="p-4 border-t border-slate-800 bg-slate-950/40">
-        <div className="flex items-center gap-3 mb-4">
+        <button
+          onClick={() => setCurrentView('settings')}
+          className="w-full flex items-center gap-3 mb-4 p-2 rounded-xl text-left hover:bg-slate-800/40 transition-all duration-200 group"
+          title="Edit Profile Settings"
+        >
           <img
             src={user?.profileImage || '/placeholder-avatar.png'}
             alt={`${user?.username || 'User'}'s avatar`}
-            className="h-10 w-10 rounded-xl border border-slate-800 object-cover bg-slate-800"
+            className="h-10 w-10 rounded-xl border border-slate-800 object-cover bg-slate-800 group-hover:ring-2 group-hover:ring-cyan-500 transition-all duration-200"
           />
           <div className="flex-1 min-w-0">
-            <p className="text-sm font-semibold text-slate-200 truncate">
+            <p className="text-sm font-semibold text-slate-200 truncate group-hover:text-cyan-400 transition-all duration-200">
               {user?.username || 'User'}
             </p>
             <p className="text-xs text-slate-500 truncate">
               {user?.email || ''}
             </p>
           </div>
-        </div>
+        </button>
 
         <button
           onClick={onLogout}

@@ -4,19 +4,18 @@ import ChatWorkspace from '../components/ChatWorkspace';
 import ConnectionsTab from '../components/ConnectionsTab';
 import PendingRequestsTab from '../components/PendingRequestsTab';
 import GlobalSearchTab from '../components/GlobalSearchTab';
+import ProfileSettingsTab from '../components/ProfileSettingsTab';
 import { useDashboardConnections } from '../hooks/useDashboardConnections';
 import { io } from 'socket.io-client';
 
 const SOCKET_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000';
 
 function ChatDashboardView({ user, onLogout, isSubmitting }) {
-  const [currentView, setCurrentView] = useState('dashboard');
+  const [currentView, setCurrentView] = useState('messages');
   const [hasUnread, setHasUnread] = useState(false);
   const socketRef = useRef(null);
 
   const {
-    activeTab,
-    setActiveTab,
     searchInput,
     setSearchInput,
     debouncedSearch,
@@ -70,6 +69,7 @@ function ChatDashboardView({ user, onLogout, isSubmitting }) {
         currentView={currentView}
         setCurrentView={setCurrentView}
         hasUnread={hasUnread}
+        pendingCount={pendingCount}
         user={user}
         onLogout={onLogout}
       />
@@ -78,61 +78,30 @@ function ChatDashboardView({ user, onLogout, isSubmitting }) {
       <div className="flex-1 h-full overflow-hidden flex flex-col">
         {currentView === 'messages' ? (
           <ChatWorkspace user={user} parentSocket={socketRef.current} />
+        ) : currentView === 'settings' ? (
+          <ProfileSettingsTab />
         ) : (
-          <div className="flex-1 overflow-y-auto p-4 sm:p-8">
+          <div className="flex-1 overflow-y-auto p-4 sm:p-8 bg-slate-50">
             <main className="mx-auto w-full max-w-5xl">
-              <section className="rounded-[2rem] border border-slate-200 bg-white/90 p-6 shadow-xl backdrop-blur-xl sm:p-8">
-                {/* Header without duplicate user profile details and logout button */}
-                <header className="flex flex-col gap-2 border-b border-slate-200 pb-6">
-                  <p className="text-xs font-bold uppercase tracking-[0.2em] text-cyan-700">SyncTalk Dashboard</p>
+              <section className="rounded-[2rem] border border-slate-200 bg-white p-6 shadow-xl backdrop-blur-xl sm:p-8">
+                {/* Dynamic Page Header */}
+                <header className="flex flex-col gap-2 border-b border-slate-200 pb-6 mb-6">
+                  <p className="text-xs font-bold uppercase tracking-[0.2em] text-cyan-700">
+                    {currentView === 'search' ? 'Directory Search' : currentView === 'requests' ? 'Network Invitations' : 'Connections Workspace'}
+                  </p>
                   <h1 className="text-2xl font-bold text-slate-900" style={{ fontFamily: 'Sora, sans-serif' }}>
-                    Welcome back, {user?.username || 'User'}
+                    {currentView === 'search' ? 'Global Directory Search' : currentView === 'requests' ? 'Pending Network Invites' : 'My Network Connections'}
                   </h1>
-                  <p className="text-sm text-slate-500 font-medium">Manage connections and network invites below.</p>
+                  <p className="text-sm text-slate-500 font-medium">
+                    {currentView === 'search' && 'Search and connect with other SyncTalk users globally.'}
+                    {currentView === 'requests' && 'Accept or decline pending incoming invitations.'}
+                    {currentView === 'connections' && 'Interact, chat, or manage your established connections.'}
+                  </p>
                 </header>
 
-                {/* Horizontal Navigation Tabs */}
-                <nav className="flex border-b border-slate-200 mt-6 mb-6">
-                  <button
-                    onClick={() => setActiveTab('connections')}
-                    className={`pb-3 text-sm font-semibold tracking-wider transition-all duration-200 border-b-2 mr-6 relative ${
-                      activeTab === 'connections'
-                        ? 'border-cyan-600 text-cyan-700'
-                        : 'border-transparent text-slate-500 hover:text-slate-800'
-                    }`}
-                  >
-                    My Connections
-                  </button>
-                  <button
-                    onClick={() => setActiveTab('requests')}
-                    className={`pb-3 text-sm font-semibold tracking-wider transition-all duration-200 border-b-2 mr-6 relative flex items-center ${
-                      activeTab === 'requests'
-                        ? 'border-cyan-600 text-cyan-700'
-                        : 'border-transparent text-slate-500 hover:text-slate-800'
-                    }`}
-                  >
-                    Pending Requests
-                    {pendingCount > 0 && (
-                      <span className="ml-2 px-2.5 py-0.5 text-xs font-bold text-white bg-rose-500 rounded-full animate-pulse">
-                        {pendingCount}
-                      </span>
-                    )}
-                  </button>
-                  <button
-                    onClick={() => setActiveTab('search')}
-                    className={`pb-3 text-sm font-semibold tracking-wider transition-all duration-200 border-b-2 relative ${
-                      activeTab === 'search'
-                        ? 'border-cyan-600 text-cyan-700'
-                        : 'border-transparent text-slate-500 hover:text-slate-800'
-                    }`}
-                  >
-                    Global Search
-                  </button>
-                </nav>
-
-                {/* Tab Content Areas */}
+                {/* Main Content Component Routing */}
                 <div>
-                  {activeTab === 'requests' ? (
+                  {currentView === 'requests' && (
                     <PendingRequestsTab
                       searchInput={searchInput}
                       setSearchInput={setSearchInput}
@@ -146,7 +115,8 @@ function ChatDashboardView({ user, onLogout, isSubmitting }) {
                       withdrawConnectionRequest={withdrawConnectionRequest}
                       handleConnectionRequest={handleConnectionRequest}
                     />
-                  ) : activeTab === 'connections' ? (
+                  )}
+                  {currentView === 'connections' && (
                     <ConnectionsTab
                       searchInput={searchInput}
                       setSearchInput={setSearchInput}
@@ -157,7 +127,8 @@ function ChatDashboardView({ user, onLogout, isSubmitting }) {
                       runAction={runAction}
                       removeConnectionRequest={removeConnectionRequest}
                     />
-                  ) : (
+                  )}
+                  {currentView === 'search' && (
                     <GlobalSearchTab
                       searchInput={searchInput}
                       setSearchInput={setSearchInput}

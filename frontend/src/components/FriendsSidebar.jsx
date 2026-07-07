@@ -73,6 +73,11 @@ function FriendsSidebar({
                     {friend.email}
                   </p>
                 </div>
+                {friend.unreadCount > 0 && (
+                  <span className="shrink-0 min-w-[20px] h-[20px] px-1.5 flex items-center justify-center text-[10px] font-bold text-white bg-cyan-600 rounded-full select-none shadow-sm">
+                    {friend.unreadCount > 9 ? '9+' : friend.unreadCount}
+                  </span>
+                )}
               </button>
             );
           })
