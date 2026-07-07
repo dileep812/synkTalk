@@ -1,7 +1,7 @@
 import React from 'react';
 import { MessageSquare, Users, LogOut, MessageCircle, User, Search, Inbox } from 'lucide-react';
 
-function Sidebar({ currentView, setCurrentView, hasUnread, pendingCount, user, onLogout }) {
+function Sidebar({ currentView, setCurrentView, hasUnread, pendingCount, user, onLogout, isSubmitting }) {
   return (
     <aside className="w-64 bg-slate-900 text-slate-100 flex flex-col h-screen border-r border-slate-800 shrink-0">
       {/* Brand Logo Header */}
@@ -130,10 +130,17 @@ function Sidebar({ currentView, setCurrentView, hasUnread, pendingCount, user, o
 
         <button
           onClick={onLogout}
-          className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl border border-slate-800 hover:border-slate-700 text-slate-400 hover:text-rose-400 hover:bg-rose-500/5 text-xs font-semibold tracking-wider transition-all duration-200"
+          disabled={isSubmitting}
+          className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl border border-slate-800 hover:border-slate-700 text-slate-400 hover:text-rose-400 hover:bg-rose-500/5 text-xs font-semibold tracking-wider transition-all duration-200 disabled:opacity-50 disabled:pointer-events-none"
         >
-          <LogOut className="h-4 w-4" />
-          <span>Sign Out</span>
+          {isSubmitting ? (
+            <span>Signing Out...</span>
+          ) : (
+            <>
+              <LogOut className="h-4 w-4" />
+              <span>Sign Out</span>
+            </>
+          )}
         </button>
       </div>
     </aside>

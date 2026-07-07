@@ -4,7 +4,7 @@ import ChatArea from './ChatArea';
 import ChatFallback from './ChatFallback';
 import { useChatWorkspace } from '../hooks/useChatWorkspace';
 
-function ChatWorkspace({ user, parentSocket }) {
+function ChatWorkspace({ user, parentSocket, friends, friendsLoading: parentLoading, friendsError: parentError }) {
   const {
     friendsLoading,
     friendsError,
@@ -24,7 +24,13 @@ function ChatWorkspace({ user, parentSocket }) {
     timelineContainerRef,
     handleScroll,
     messagesEndRef
-  } = useChatWorkspace({ user, parentSocket });
+  } = useChatWorkspace({
+    user,
+    parentSocket,
+    friends,
+    friendsLoading: parentLoading,
+    friendsError: parentError
+  });
 
   return (
     <div className="flex-1 flex h-screen bg-slate-50 overflow-hidden">

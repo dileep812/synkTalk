@@ -3,10 +3,10 @@ import { io } from 'socket.io-client';
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000';
 
-export function useChatWorkspace({ user, parentSocket }) {
-  const [friends, setFriends] = useState([]);
-  const [friendsLoading, setFriendsLoading] = useState(true);
-  const [friendsError, setFriendsError] = useState('');
+export function useChatWorkspace({ user, parentSocket, friends: initialFriends, friendsLoading: initialLoading, friendsError: initialError }) {
+  const [friends, setFriends] = useState(initialFriends || []);
+  const [friendsLoading, setFriendsLoading] = useState(initialFriends ? (initialLoading ?? false) : true);
+  const [friendsError, setFriendsError] = useState(initialFriends ? (initialError ?? '') : '');
   const [searchTerm, setSearchTerm] = useState('');
 
   const [activeFriend, setActiveFriend] = useState(null);
@@ -26,6 +26,25 @@ export function useChatWorkspace({ user, parentSocket }) {
   const timelineContainerRef = useRef(null);
   const shouldScrollToBottomRef = useRef(true);
 
+  // Sync state if initialFriends/loading/error variables are updated from parent context
+  useEffect(() => {
+    if (initialFriends) {
+      setFriends(initialFriends);
+    }
+  }, [initialFriends]);
+
+  useEffect(() => {
+    if (initialFriends && initialLoading !== undefined) {
+      setFriendsLoading(initialLoading);
+    }
+  }, [initialLoading, initialFriends]);
+
+  useEffect(() => {
+    if (initialFriends && initialError !== undefined) {
+      setFriendsError(initialError);
+    }
+  }, [initialError, initialFriends]);
+
   // 1. Establish/Fallback socket connection
   useEffect(() => {
     if (parentSocket) {
@@ -44,8 +63,10 @@ export function useChatWorkspace({ user, parentSocket }) {
     };
   }, [parentSocket]);
 
-  // 2. Fetch friends on mount
+  // 2. Fetch friends on mount (skipped if shared connections list is passed by parent)
   useEffect(() => {
+    if (initialFriends) return;
+
     const fetchFriends = async () => {
       try {
         setFriendsLoading(true);
@@ -64,7 +85,7 @@ export function useChatWorkspace({ user, parentSocket }) {
       }
     };
     fetchFriends();
-  }, []);
+  }, [initialFriends]);
 
   // 3. Load historical message log when active friend changes (LIMITED TO 10 ITEMS)
   useEffect(() => {

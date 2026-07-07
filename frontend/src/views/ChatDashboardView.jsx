@@ -68,12 +68,19 @@ function ChatDashboardView({ user, onLogout, isSubmitting }) {
         pendingCount={pendingCount}
         user={user}
         onLogout={onLogout}
+        isSubmitting={isSubmitting}
       />
 
       {/* Main content pane */}
       <div className="flex-1 h-full overflow-hidden flex flex-col">
         {currentView === 'messages' ? (
-          <ChatWorkspace user={user} parentSocket={socket} />
+          <ChatWorkspace
+            user={user}
+            parentSocket={socket}
+            friends={myConnections}
+            friendsLoading={loading}
+            friendsError={error}
+          />
         ) : currentView === 'settings' ? (
           <ProfileSettingsTab />
         ) : (
