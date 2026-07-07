@@ -1,6 +1,6 @@
 // backend/sockets/chatHandler.js
 import Message from '../models/Message.js';
-
+import redisClient from '../config/redis.js'; 
 export const registerChatHandlers = (io, socket) => {
     // Listen for incoming chat messages
     socket.on('message:send', async (data) => {
@@ -20,7 +20,17 @@ export const registerChatHandlers = (io, socket) => {
                 status: isRecipientOnline ? "delivered" : "sent",
                 timestamp: new Date()
             });
-             newMessage.save();
+            // Push to Redis queue. If the write fails, fall back to writing directly to MongoDB to avoid data loss.
+            redisClient.lPush('chat:message_queue', JSON.stringify(newMessage))
+                .catch(async (err) => {
+                    console.error('❌ [Queue Error] Failed to push to Redis. Falling back to direct MongoDB write:', err.message);
+                    try {
+                        await newMessage.save();
+                        console.log('💾 [Queue Fallback] Message saved directly to MongoDB successfully.');
+                    } catch (dbErr) {
+                        console.error('❌ [Queue Fallback Critical] Failed to save message directly to MongoDB:', dbErr.message);
+                    }
+                });
 
             if (isRecipientOnline) {
                 // 2. Real-time emit to the receiver's personal ID room
