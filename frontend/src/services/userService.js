@@ -76,6 +76,20 @@ const updateProfile = async ({ username, profileImage, email }) => {
   })
 }
 
+const getSessionStats = async () => {
+  return apiRequest('/sessions', {
+    method: 'GET',
+  })
+}
+
+const terminateSessions = async (type, id = '') => {
+  const queryParams = new URLSearchParams({ type })
+  if (id) queryParams.set('id', id)
+  return apiRequest(`/sessions?${queryParams.toString()}`, {
+    method: 'DELETE',
+  })
+}
+
 export {
   getFriends,
   searchUsers,
@@ -84,4 +98,6 @@ export {
   withdrawConnectionRequest,
   removeConnectionRequest,
   updateProfile,
+  getSessionStats,
+  terminateSessions,
 }

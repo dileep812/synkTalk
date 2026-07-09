@@ -15,6 +15,7 @@ import authRouter from "./routes/authRouters.js";
 import userRouter from "./routes/userRoutes.js"
 import requestRouter from "./routes/requestRoutes.js"
 import messageRouter from "./routes/messageRoutes.js"
+import sessionRouter from "./routes/sessionRoutes.js";
 
 const app = express()
 
@@ -69,13 +70,29 @@ const sessionMiddleware = session({
     }
 })
 app.use(sessionMiddleware);
+// Capture session metadata (IP, User-Agent, and timestamps) for account security auditing
+app.use((req, res, next) => {
+    if (req.session && req.session.user) {
+        if (!req.session.userAgent) {
+            req.session.userAgent = req.headers['user-agent'] || 'Unknown';
+        }
+        if (!req.session.ip) {
+            req.session.ip = req.headers['x-forwarded-for'] || req.ip || req.socket.remoteAddress;
+        }
+        if (!req.session.loginTime) {
+            req.session.loginTime = new Date().toISOString();
+        }
+        req.session.lastAccess = new Date().toISOString();
+    }
+    next();
+});
 startRedisToMongoSync();
 setupSockets(io, sessionMiddleware);
 app.use("/auth", authRouter);
 app.use("/users", userRouter);
 app.use("/request", requestRouter);
 app.use("/messages", messageRouter);
-
+app.use("/sessions",sessionRouter);
 app.get("/", (req, res) => {
     res.json({
         success: true,
