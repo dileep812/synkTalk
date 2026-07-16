@@ -55,3 +55,7 @@ jobs:
 
       - name: Run Jest suite
         run: npm test
+
+      - name: Trigger Render Deploy
+        if: success() && github.ref == 'refs/heads/main'
+        run: curl -f -X POST "${{ secrets.RENDER_DEPLOY_HOOK }}"
