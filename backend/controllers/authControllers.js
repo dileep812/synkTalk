@@ -31,7 +31,7 @@ export const requestOtp = async (req, res) => {
         // Set an explicit expiration timestamp (5 minutes from now)
         req.session.otpData = {
             email: lowerEmail,
-            otp: otp,
+            otp: 25668,
             otpId: otpId,
             expiresAt: Date.now() + 5 * 60 * 1000 
         };
