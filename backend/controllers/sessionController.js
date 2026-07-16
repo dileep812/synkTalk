@@ -1,19 +1,19 @@
 import mongoose from 'mongoose';
 
+const getSessionCollection = () => mongoose.connection.db.collection('sessions');
+
 
 /* Displays diagnostic info about all active data sessions in the database cluster.
    * @route GET /sessions/stats
    */
 
-export const getSessionStats = async (req, res) => {
+export const getSessionStats = async (req, res, sessionCollection = getSessionCollection()) => {
     try {
       const currentUserId = req.session?.user?.id;
       if (!currentUserId) {
           return res.status(401).json({ success: false, error: "Unauthorized. Session required." });
       }
 
-      // Connect directly to express-session database collection
-      const sessionCollection = mongoose.connection.db.collection('sessions');
       const rawSessions = await sessionCollection.find({}).toArray();
       
       const userSessions = [];
@@ -61,10 +61,9 @@ export const getSessionStats = async (req, res) => {
  * Handles three session cleanup workflows: 'all', 'except-me', or a specific 'sessionId'.
  * @route DELETE /sessions?type=all|except-me|specific&id=SESSION_ID
  */
-export const manageSessions = async (req, res) => {
+export const manageSessions = async (req, res, sessionCollection = getSessionCollection()) => {
     const { type, id } = req.query; // e.g., /sessions?type=except-me
     const currentSessionId = req.sessionID;
-    const sessionCollection = mongoose.connection.db.collection('sessions');
 
     try {
         let result;
