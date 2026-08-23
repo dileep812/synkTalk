@@ -1,4 +1,4 @@
-import { describe, expect, it, jest } from '@jest/globals';
+import { describe, expect, it, jest, beforeEach } from '@jest/globals';
 import { createMockRequest } from './helpers/mockRequest.js';
 import { createMockResponse } from './helpers/mockResponse.js';
 
@@ -14,8 +14,11 @@ MockMessage.find = jest.fn();
 MockMessage.insertMany = jest.fn();
 
 const mockRedisClient = {
+    isOpen: true,
     lPush: jest.fn(),
-    rPop: jest.fn()
+    rPop: jest.fn(),
+    lRange: jest.fn().mockResolvedValue([]),
+    lLen: jest.fn().mockResolvedValue(0)
 };
 
 await jest.unstable_mockModule('../models/Message.js', () => ({ default: MockMessage }));
@@ -23,10 +26,17 @@ await jest.unstable_mockModule('../config/redis.js', () => ({ default: mockRedis
 
 const { getChatHistory } = await import('../controllers/messageControllers.js');
 const { registerChatHandlers } = await import('../sockets/chatHandler.js');
-const { startRedisToMongoSync } = await import('../services/reddisToDb.js');
+const { flushRedisToMongo, startRedisToMongoSync } = await import('../services/reddisToDb.js');
 
 describe('message and socket pipelines', () => {
-    it('returns a bounded chat history window', async () => {
+    beforeEach(() => {
+        jest.clearAllMocks();
+        mockRedisClient.isOpen = true;
+        mockRedisClient.lRange.mockResolvedValue([]);
+        mockRedisClient.lLen.mockResolvedValue(0);
+    });
+
+    it('returns a bounded chat history window merging Redis and DB', async () => {
         MockMessage.find.mockReturnValueOnce({
             sort: jest.fn().mockReturnValueOnce({
                 limit: jest.fn().mockReturnValueOnce({
@@ -53,7 +63,7 @@ describe('message and socket pipelines', () => {
 
     it('pushes outgoing chat events to the queue and emits delivery updates', async () => {
         const socket = {
-            user: { id: 'user-1' },
+            user: { id: 'user-1', username: 'tester' },
             on: jest.fn(),
             emit: jest.fn(),
             join: jest.fn(),
@@ -75,27 +85,16 @@ describe('message and socket pipelines', () => {
         expect(io.to).toHaveBeenCalledWith('user-2');
     });
 
-    it('re-queues Redis batch work into MongoDB on successful polling', async () => {
-        let scheduledCallback;
-        const intervalSpy = jest.spyOn(global, 'setInterval').mockImplementation((callback) => {
-            scheduledCallback = callback;
-            return 1;
-        });
-
+    it('flushes Redis message batch into MongoDB upon reaching batch threshold', async () => {
         mockRedisClient.rPop.mockResolvedValueOnce(JSON.stringify({ sender: 'user-1', recipient: 'user-2', text: 'hello' }));
         mockRedisClient.rPop.mockResolvedValueOnce(null);
         MockMessage.insertMany.mockResolvedValueOnce([{ _id: 'msg-1' }]);
 
-        await startRedisToMongoSync();
-        await scheduledCallback();
-        await Promise.resolve();
+        await flushRedisToMongo(100);
 
-        expect(intervalSpy).toHaveBeenCalled();
         expect(MockMessage.insertMany).toHaveBeenCalledWith(
             [expect.objectContaining({ sender: 'user-1', recipient: 'user-2', text: 'hello' })],
             { ordered: false }
         );
-
-        intervalSpy.mockRestore();
     });
 });
