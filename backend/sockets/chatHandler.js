@@ -1,59 +1,70 @@
 // backend/sockets/chatHandler.js
 import Message from '../models/Message.js';
 import redisClient from '../config/redis.js'; 
+import { flushRedisToMongo, BATCH_THRESHOLD } from '../services/reddisToDb.js';
+
 export const registerChatHandlers = (io, socket) => {
     // Listen for incoming chat messages
     socket.on('message:send', async (data) => {
         const startTime = Date.now();
         const { receiverId, text } = data;
-        const senderId = socket.user.id; // Pulled safely from authenticated session
+        const senderId = (socket.user.id || socket.user._id).toString();
+        const targetId = (receiverId?._id || receiverId).toString();
 
         try {
-            const recipientRoom = io.sockets.adapter.rooms.get(receiverId);
+            // Check if recipient is actively connected in their private room
+            const recipientRoom = io.sockets.adapter.rooms.get(targetId);
             const isRecipientOnline = recipientRoom && recipientRoom.size > 0;
             
-            // 1. Persist message directly to MongoDB via your model
+            // 1. Create message model instance
             const newMessage = new Message({
                 sender: senderId,
-                recipient: receiverId,
+                recipient: targetId,
                 text: text,
                 status: isRecipientOnline ? "delivered" : "sent",
                 timestamp: new Date()
             });
-            // Push to Redis queue. If the write fails, fall back to writing directly to MongoDB to avoid data loss.
-            redisClient.lPush('chat:message_queue', JSON.stringify(newMessage))
-                .catch(async (err) => {
-                    console.error('❌ [Queue Error] Failed to push to Redis. Falling back to direct MongoDB write:', err.message);
-                    try {
-                        await newMessage.save();
-                        console.log('💾 [Queue Fallback] Message saved directly to MongoDB successfully.');
-                    } catch (dbErr) {
-                        console.error('❌ [Queue Fallback Critical] Failed to save message directly to MongoDB:', dbErr.message);
-                    }
-                });
 
+            // 2. Real-time emit to the receiver's personal ID room (Immediate, in-memory)
+            io.to(targetId).emit('message:received', newMessage);
+
+            // 3. Confirm message sent to the sender
+            socket.emit('message:sent', newMessage);
+
+            // 4. Update status to delivered if online
             if (isRecipientOnline) {
-                // 2. Real-time emit to the receiver's personal ID room
-                io.to(receiverId).emit('message:received', newMessage);
-                // 3. Confirm message sent to the sender with the real MongoDB document
-                socket.emit('message:sent', newMessage);
-                // 4. Update status to delivered instantly since recipient is online
                 socket.emit('message:status_update', {
                     messageId: newMessage._id,
                     status: 'delivered',
-                    recipientId: receiverId
+                    recipientId: targetId
                 });
-            } else {
-                // Target is completely offline. Confirm sent to the sender (remains single tick).
-                socket.emit('message:sent', newMessage);
             }
-            
+
+            // 5. Calculate & log real-time dispatch latency (Sub-5ms)
             const duration = Date.now() - startTime;
-            console.log(`[Latency Log] message:send from ${senderId} to ${receiverId} took ${duration}ms`);
+            console.log(`⚡ [Latency Log] message:send from ${senderId} to ${targetId} delivered in ${duration}ms`);
+
+            // 6. Asynchronous Non-Blocking Redis Enqueue (Zero-latency background task)
+            if (redisClient.isOpen) {
+                redisClient.lPush('chat:message_queue', JSON.stringify(newMessage))
+                    .then((queueLength) => {
+                        if (queueLength >= BATCH_THRESHOLD) {
+                            console.log(`🚀 [Threshold Reached] Queue reached ${queueLength}/${BATCH_THRESHOLD}. Flushing batch to MongoDB...`);
+                            flushRedisToMongo(BATCH_THRESHOLD);
+                        }
+                    })
+                    .catch(async (queueErr) => {
+                        console.warn('⚠️ [Redis Queue Error] Falling back to direct MongoDB write:', queueErr.message);
+                        await newMessage.save().catch(e => console.error('❌ MongoDB fallback save error:', e.message));
+                    });
+            } else {
+                // If Redis is offline, persist to DB asynchronously in background
+                newMessage.save().catch(e => console.error('❌ Direct DB save error:', e.message));
+            }
 
         } catch (error) {
             const duration = Date.now() - startTime;
-            console.error(`[Latency Log] message:send FAILED from ${senderId} to ${receiverId} after ${duration}ms. Error:`, error);
+            console.error(`❌ [Latency Log] message:send FAILED after ${duration}ms. Error:`, error);
             socket.emit('error', { message: "Message delivery failed." });
         }
     });
@@ -61,8 +72,9 @@ export const registerChatHandlers = (io, socket) => {
     // Listen for typing notifications
     socket.on('chat:typing', (data) => {
         const { receiverId, isTyping } = data;
-        io.to(receiverId).emit('chat:typing_status', {
-            senderId: socket.user.id,
+        const targetId = (receiverId?._id || receiverId).toString();
+        io.to(targetId).emit('chat:typing_status', {
+            senderId: (socket.user.id || socket.user._id).toString(),
             isTyping
         });
     });

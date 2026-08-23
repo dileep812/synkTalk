@@ -13,7 +13,8 @@ const SOCKET_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000';
 function ChatDashboardView({ user, onLogout, isSubmitting }) {
   const [socket] = useState(() => io(SOCKET_URL, {
     withCredentials: true,
-    autoConnect: true
+    autoConnect: true,
+    transports: ['websocket', 'polling']
   }));
   const [currentView, setCurrentView] = useState('messages');
   const [hasUnread, setHasUnread] = useState(false);
@@ -47,14 +48,16 @@ function ChatDashboardView({ user, onLogout, isSubmitting }) {
 
   // Establish persistent socket event listeners on mount
   useEffect(() => {
-    socket.on('message:received', (message) => {
+    const handleReceived = (message) => {
       if (currentViewRef.current !== 'messages') {
         setHasUnread(true);
       }
-    });
+    };
+
+    socket.on('message:received', handleReceived);
 
     return () => {
-      socket.disconnect();
+      socket.off('message:received', handleReceived);
     };
   }, [socket]);
 

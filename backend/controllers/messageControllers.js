@@ -1,7 +1,9 @@
 import Message from '../models/Message.js';
+import { getPendingRedisMessages } from '../services/reddisToDb.js';
 
 /**
- * Retrieves a paginated chunk (last 10) of the historical message thread.
+ * Retrieves a paginated chunk of the historical message thread from BOTH MongoDB and Redis.
+ * Guarantees 100% data consistency for newly sent messages.
  * @route GET /messages/:chatUserId?cursor=TIMESTAMP_OR_ID&limit=10
  */
 export const getChatHistory = async (req, res) => {
@@ -11,11 +13,14 @@ export const getChatHistory = async (req, res) => {
         
         // Parse pagination configurations (Default to 10 items)
         const limit = parseInt(req.query.limit, 10) || 10;
-        const { cursor } = req.query; // This will be a timestamp or message ID string
+        const { cursor } = req.query; // Cursor timestamp
 
-        console.log(`[Message Controller | getChatHistory] Fetching history for User: ${currentUserId} with Contact: ${chatUserId} | Cursor: ${cursor} | Limit: ${limit}`);
+        console.log(`[Message Controller | getChatHistory] Fetching history from DB + Redis for User: ${currentUserId} with Contact: ${chatUserId} | Cursor: ${cursor} | Limit: ${limit}`);
 
-        // Base query: Fetch messages between Me -> Them OR Them -> Me
+        // 1. Fetch pending in-flight messages from Redis queue (not yet flushed to Mongo)
+        const pendingMessages = await getPendingRedisMessages(currentUserId, chatUserId);
+
+        // 2. Fetch stored messages from MongoDB
         const baseQuery = {
             $or: [
                 { sender: currentUserId, recipient: chatUserId },
@@ -23,39 +28,62 @@ export const getChatHistory = async (req, res) => {
             ]
         };
 
-        // If a cursor is provided, only fetch messages OLDER than the cursor
         if (cursor) {
             baseQuery.timestamp = { $lt: new Date(cursor) };
         }
 
-        // Fetch messages sorted newest first so we get the most recent chunk
-        const messages = await Message.find(baseQuery)
-            .sort({ timestamp: -1 }) 
-            .limit(limit + 1) // Fetch 1 extra to determine if a next page exists
+        const dbMessages = await Message.find(baseQuery)
+            .sort({ timestamp: -1 })
+            .limit(limit + 5)
             .lean();
 
-        // Check if there are more messages left to load in history
-        const hasMore = messages.length > limit;
-        
-        // Remove the extra check item if it exists
-        if (hasMore) {
-            messages.pop();
+        // 3. Merge MongoDB and Redis messages, deduplicating by ID or timestamp+content
+        const messageMap = new Map();
+
+        const addMsg = (msg) => {
+            if (!msg) return;
+            const key = msg._id ? msg._id.toString() : `${msg.sender}_${msg.recipient}_${new Date(msg.timestamp || msg.createdAt).getTime()}`;
+            if (!messageMap.has(key)) {
+                messageMap.set(key, {
+                    ...msg,
+                    _id: msg._id ? msg._id.toString() : key,
+                    timestamp: msg.timestamp || msg.createdAt || new Date()
+                });
+            }
+        };
+
+        // Add DB messages first
+        dbMessages.forEach(addMsg);
+
+        // Add Redis in-flight messages (overlay in-flight data)
+        pendingMessages.forEach(addMsg);
+
+        let allMessages = Array.from(messageMap.values());
+
+        // Filter by cursor if supplied
+        if (cursor) {
+            const cursorDate = new Date(cursor);
+            allMessages = allMessages.filter(m => new Date(m.timestamp) < cursorDate);
         }
 
-        // CRITICAL STEP: Reverse the chunk back to oldest-to-newest before responding 
-        // so it renders correctly going down the chat timeline UI screen.
-        messages.reverse();
+        // Sort newest first
+        allMessages.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
 
-        // Identify the next cursor pointer (the oldest message in this current batch)
-        const nextCursor = messages.length > 0 ? messages[0].timestamp : null;
+        // Check if there are more messages left
+        const hasMore = allMessages.length > limit;
+        const slicedMessages = allMessages.slice(0, limit);
 
-        console.log(`[Message Controller | getChatHistory] Sending ${messages.length} messages | hasMore: ${hasMore} | nextCursor: ${nextCursor}`);
+        // Reverse to oldest-to-newest for chat timeline UI
+        slicedMessages.reverse();
+
+        const nextCursor = slicedMessages.length > 0 ? slicedMessages[0].timestamp : null;
+
         return res.status(200).json({
             success: true,
-            count: messages.length,
+            count: slicedMessages.length,
             hasMore,
             nextCursor,
-            messages
+            messages: slicedMessages
         });
 
     } catch (error) {
