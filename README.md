@@ -67,10 +67,10 @@ flowchart TD
 * **Email Alert**: The system automatically sends an email to **`yarramanenidileep@gmail.com`** to notify the admin.
 * **No Lost Messages**: Chatting continues without any interruption or lost messages.
 
-### 3. Read Receipts (Blue Ticks) & Delivery Status
-* **In-Queue Status Update**: When User B opens a chat, read receipts update the status to `"read"` directly inside Redis and MongoDB at the same time.
-* **Blue Ticks**: User A instantly sees double blue ticks.
-* **Offline Catch-Up**: If a user was offline, messages in Redis are updated to `"delivered"` as soon as they log back in.
+### 3. Ticks & Read Receipts in Redis
+* **Single Tick (`✓ Sent`)**: The message is sent and stored in the Redis queue.
+* **Double White Ticks (`✓✓ Delivered`)**: Updated directly in Redis as soon as the recipient receives the message or logs back in.
+* **Double Blue Ticks (`✓✓ Read`)**: When User B opens the chat, the message status is updated to `"read"` inside both Redis and MongoDB in real time.
 
 ### 4. Active / Online Status
 * **Green Dot / Active Now**: Shows when friends are currently online.
