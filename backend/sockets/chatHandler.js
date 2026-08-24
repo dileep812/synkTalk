@@ -6,6 +6,12 @@ import { flushRedisToMongo, BATCH_THRESHOLD } from '../services/reddisToDb.js';
 export const registerChatHandlers = (io, socket) => {
     // Listen for incoming chat messages
     socket.on('message:send', async (data) => {
+        if (!socket.user || !(socket.user.id || socket.user._id)) {
+            socket.emit('error', { message: "Unauthorized. Please log in first." });
+            socket.disconnect(true);
+            return;
+        }
+
         const startTime = Date.now();
         const { receiverId, text } = data;
         const senderId = (socket.user.id || socket.user._id).toString();

@@ -23,6 +23,16 @@ function AuthProvider({ children }) {
     }
 
     loadSession()
+
+    const handleUnauthorized = () => {
+      disconnectSocket()
+      setUser(null)
+    }
+
+    window.addEventListener('auth:unauthorized', handleUnauthorized)
+    return () => {
+      window.removeEventListener('auth:unauthorized', handleUnauthorized)
+    }
   }, [])
 
   const signOut = async () => {

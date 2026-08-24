@@ -1,4 +1,5 @@
 import mongoose from 'mongoose';
+import { getIO } from '../io.js';
 
 const getSessionCollection = (customCollection) => {
     if (customCollection && typeof customCollection.find === 'function' && typeof customCollection.deleteMany === 'function') {
@@ -87,6 +88,12 @@ export const manageSessions = async (req, res, customCollection) => {
             case 'all': {
                 let result;
                 if (currentUserId) {
+                    try {
+                        const io = getIO();
+                        io.in(currentUserId.toString()).emit('auth:revoked');
+                        io.in(currentUserId.toString()).disconnectSockets(true);
+                    } catch {}
+
                     const rawSessions = await collection.find({}).toArray();
                     const userSessionIds = [];
                     for (const doc of rawSessions) {

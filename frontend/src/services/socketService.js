@@ -15,6 +15,18 @@ export const getSocket = () => {
         autoConnect: true,
         transports: ['websocket', 'polling']
       });
+
+      socketInstance.on('auth:revoked', () => {
+        disconnectSocket();
+        window.dispatchEvent(new CustomEvent('auth:unauthorized'));
+      });
+
+      socketInstance.on('connect_error', (err) => {
+        if (err?.message?.includes('Authentication failed') || err?.message?.includes('No active session')) {
+          disconnectSocket();
+          window.dispatchEvent(new CustomEvent('auth:unauthorized'));
+        }
+      });
     } else if (socketInstance.disconnected) {
       socketInstance.connect();
     }

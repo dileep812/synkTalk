@@ -109,8 +109,6 @@ export const getMe = (req, res) => {
    
 };
 
-import { getIO } from '../io.js';
-
 export const logout = (req, res) => {
     const username = req.session?.user?.username || 'Unknown User';
     const userId = (req.session?.user?.id || req.session?.user?._id)?.toString();
