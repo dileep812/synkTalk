@@ -10,19 +10,22 @@ export const BATCH_THRESHOLD = 100; // Flushes to MongoDB exclusively when 100 m
  */
 export async function flushRedisToMongo(batchSize = BATCH_THRESHOLD) {
     if (isSyncing) return;
-    isSyncing = true;
-    const startTime = Date.now();
-    const messagesToSave = [];
+    if (!redisClient?.isOpen) return;
 
     try {
-        if (!redisClient.isOpen) {
-            isSyncing = false;
+        // Strict Condition: Only pop and flush when at least 100 messages have accumulated
+        const queueLength = await redisClient.lLen('chat:message_queue').catch(() => 0);
+        if (queueLength < batchSize) {
             return;
         }
 
+        isSyncing = true;
+        const startTime = Date.now();
+        const messagesToSave = [];
+
         for (let i = 0; i < batchSize; i++) {
             const rawMessage = await redisClient.rPop('chat:message_queue');
-            if (!rawMessage) break; // Queue empty, stop popping
+            if (!rawMessage) break;
 
             const parsedMsg = typeof rawMessage === 'string' ? JSON.parse(rawMessage) : rawMessage;
             delete parsedMsg._id; // Let MongoDB generate clean ObjectIds on insert
@@ -32,7 +35,7 @@ export async function flushRedisToMongo(batchSize = BATCH_THRESHOLD) {
         const duration = Date.now() - startTime;
         if (messagesToSave.length > 0) {
             await Message.insertMany(messagesToSave, { ordered: false });
-            console.log(`💾 [Count Batch Sync] 100-Message Threshold Reached: Flushed ${messagesToSave.length} messages to MongoDB | Latency: ${duration}ms`);
+            console.log(`💾 [Strict 100-Batch Sync] 100-Message Threshold Reached: Flushed ${messagesToSave.length} messages to MongoDB | Latency: ${duration}ms`);
         }
     } catch (error) {
         const duration = Date.now() - startTime;

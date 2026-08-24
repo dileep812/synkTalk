@@ -86,6 +86,7 @@ describe('message and socket pipelines', () => {
     });
 
     it('flushes Redis message batch into MongoDB upon reaching batch threshold', async () => {
+        mockRedisClient.lLen.mockResolvedValueOnce(100);
         mockRedisClient.rPop.mockResolvedValueOnce(JSON.stringify({ sender: 'user-1', recipient: 'user-2', text: 'hello' }));
         mockRedisClient.rPop.mockResolvedValueOnce(null);
         MockMessage.insertMany.mockResolvedValueOnce([{ _id: 'msg-1' }]);

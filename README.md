@@ -1,130 +1,114 @@
 # ⚡ SynkTalk
 
-**SynkTalk** is a real-time, event-driven communication workspace engineered with **React**, **Node.js/Express**, **Socket.io**, **Redis**, and **MongoDB**. It delivers sub-10ms chat messages through an asynchronous memory write-buffer, live presence engine, and automatic MongoDB failover with administrator email alerting.
+**SynkTalk** is a fast real-time chat application built with **React**, **Node.js/Express**, **Socket.io**, **Redis**, and **MongoDB**. 
+
+It delivers instant messages in under **10ms** by saving messages in a fast **Redis memory queue** first, and saving them into **MongoDB** only when 100 messages are reached. If Redis fails, messages are saved directly to MongoDB without losing any data.
 
 ---
 
-## 🏗️ System Architecture & Message Flow
+## 📊 How It Works (Message Flow)
 
 ```mermaid
 flowchart TD
-    subgraph Clients["👥 CLIENTS"]
-        Sender["👤 Client A (Sender)"]
-        Receiver["👤 Client B (Recipient)"]
+    subgraph Users["👥 Users"]
+        A["👤 User A (Sender)"]
+        B["👤 User B (Receiver)"]
     end
 
-    subgraph Server["⚡ SYNKTALK SERVER (PORT 5000)"]
-        SocketEngine["Socket.io Real-Time Engine\n(In-Memory Routing)"]
-        HealthCheck{"Redis Queue\nAvailable?"}
+    subgraph App["⚡ SynkTalk Server"]
+        Socket["Socket.io Server\n(Delivers messages instantly)"]
+        Check{"Is Redis Working?"}
     end
 
-    subgraph Storage["💾 STORAGE MATRIX"]
-        RedisQueue[("📦 Redis Memory Queue\n(chat:message_queue)")]
-        MongoDB[("🍃 MongoDB Database\n(Permanent Storage)")]
+    subgraph Data["💾 Storage"]
+        Redis[("📦 Redis Queue\n(Holds up to 100 messages)")]
+        Mongo[("🍃 MongoDB Database\n(Permanent storage)")]
     end
 
-    subgraph Notification["📧 ALERT SYSTEM"]
-        GmailAPI["Gmail OAuth2 Dispatcher"]
-        AdminUser["👨‍💻 Admin\nyarramanenidileep@gmail.com"]
+    subgraph Alerts["📧 Alerts"]
+        Email["Gmail Alert System"]
+        Admin["👨‍💻 Admin Email\nyarramanenidileep@gmail.com"]
     end
 
-    %% 1. Real-Time Chat Dispatch
-    Sender -->|"1. emit('message:send')"| SocketEngine
-    SocketEngine -->|"2a. emit('message:received') [Instant ~5ms]"| Receiver
-    SocketEngine -->|"2b. emit('message:sent') [Ack]"| Sender
-
-    %% 2. Asynchronous Offloading & Decision Branch
-    SocketEngine -->|"3. Offload Persistence"| HealthCheck
+    %% Flow Steps
+    A -->|"1. Send message"| Socket
+    Socket -->|"2a. Deliver instantly (~5ms)"| B
+    Socket -->|"2b. Confirm sent"| A
+    Socket -->|"3. Send to queue"| Check
 
     %% Normal Path
-    HealthCheck -->|"✅ Normal Flow"| RedisQueue
-    RedisQueue -->|"4a. Batch Flush (100 msgs)"| MongoDB
+    Check -->|"✅ Yes"| Redis
+    Redis -->|"4a. When 100 messages reached"| Mongo
 
-    %% Failover Path
-    HealthCheck -->|"❌ Redis Offline / Error"| MongoDB
-    HealthCheck -->|"❌ Trigger Failover Alert"| GmailAPI
-    GmailAPI -->|"Send Alert Email"| AdminUser
+    %% Failure Fallback
+    Check -->|"❌ No (Redis Down)"| Mongo
+    Check -->|"❌ Trigger error alert"| Email
+    Email -->|"Send alert email"| Admin
 
     %% Read Receipts
-    Receiver -.->|"5. emit('message:read_receipt')"| SocketEngine
-    SocketEngine -.->|"6. emit('messages:marked_read') [Blue Ticks]"| Sender
-
-    %% Styling
-    classDef client fill:#e0f2fe,stroke:#0284c7,stroke-width:2px,color:#0f172a;
-    classDef server fill:#fef3c7,stroke:#d97706,stroke-width:2px,color:#0f172a;
-    classDef storage fill:#dcfce7,stroke:#16a34a,stroke-width:2px,color:#0f172a;
-    classDef alert fill:#fee2e2,stroke:#dc2626,stroke-width:2px,color:#0f172a;
-
-    class Sender,Receiver client;
-    class SocketEngine,HealthCheck server;
-    class RedisQueue,MongoDB storage;
-    class GmailAPI,AdminUser alert;
+    B -.->|"5. Read chat"| Socket
+    Socket -.->|"6. Blue ticks acknowledgment"| A
 ```
 
 ---
 
-## 🔄 Core Workflows & Scenarios
+## 🔍 How Each Case Works (Simple Explanation)
 
-### 1️⃣ Real-Time Messaging (Normal Mode)
-* **Sub-5ms Latency**: Client A sends a message. The server checks recipient presence and broadcasts the payload to Client B immediately in-memory without waiting for disk writes.
-* **Write-Behind Buffer**: Message is pushed into the Redis queue (`chat:message_queue`).
-* **Batch Flush**: When the queue accumulates 100 messages, the background worker bulk-inserts them into MongoDB in a single database roundtrip.
+### 1. Sending Messages (Normal Mode)
+* **Instant Delivery**: When User A sends a message, User B receives it in **~5ms** over WebSockets.
+* **Redis Queue**: The message is placed in the Redis list (`chat:message_queue`).
+* **Batch Save (100 Messages)**: Messages stay in Redis until **100 messages** accumulate. Once 100 messages are reached, the server saves all 100 messages into MongoDB in a single fast write.
 
-### 2️⃣ Redis Failure & Automatic Database Direct Write
-* **Zero Data Loss**: If Redis becomes unreachable or an enqueue error occurs, the server catches the exception and immediately persists the message directly into MongoDB (`newMessage.save()`).
-* **Admin Alert**: An automated notification email is sent to **`yarramanenidileep@gmail.com`** via the Gmail API.
+### 2. If Redis Fails (Fallback Mode)
+* **Direct Save**: If Redis goes down or disconnects, the server immediately saves the message directly into MongoDB.
+* **Email Alert**: The system automatically sends an email to **`yarramanenidileep@gmail.com`** to notify the admin.
+* **No Lost Messages**: Chatting continues without any interruption or lost messages.
 
-### 3️⃣ Read Receipts (Blue Ticks) & Delivery Status
-* **Redis & DB Synchronization**: When Client B reads a chat, `message:read_receipt` updates in-flight messages in Redis and persisted messages in MongoDB simultaneously, immediately firing blue tick acknowledgments (`messages:marked_read`) to Client A.
-* **Offline Catch-Up**: When an offline user connects, all pending messages are marked `delivered`.
+### 3. Read Receipts (Blue Ticks) & Delivery Status
+* **In-Queue Status Update**: When User B opens a chat, read receipts update the status to `"read"` directly inside Redis and MongoDB at the same time.
+* **Blue Ticks**: User A instantly sees double blue ticks.
+* **Offline Catch-Up**: If a user was offline, messages in Redis are updated to `"delivered"` as soon as they log back in.
 
-### 4️⃣ Real-Time Presence & Typing Indicators
-* **Live Roster**: Server tracks active WebSocket sessions and broadcasts `user:online`, `user:offline`, and `users:online_list`.
-* **Typing Animation**: `chat:typing` events broadcast live typing animations with auto-dismiss timers.
+### 4. Active / Online Status
+* **Green Dot / Active Now**: Shows when friends are currently online.
+* **Typing Indicator**: Shows live `"Typing..."` animation when the other person is typing.
 
 ---
 
-## 🚀 Quickstart & Production Setup
+## 🛠️ Tech Stack
+
+* **Frontend**: React
+* **Backend**: Node.js, Express, Socket.io
+* **Queue / Cache**: Redis
+* **Database**: MongoDB (Mongoose)
+* **Testing**: Jest (19 automated unit & integration tests)
+
+---
+
+## 🚀 How to Run Locally
 
 ### 1. Install Dependencies
 ```bash
-# Backend dependencies
+# Backend
 cd backend && npm install
 
-# Frontend dependencies
+# Frontend
 cd ../frontend && npm install
 ```
 
-### 2. Configure Environment
-Set up your `.env` files in both `backend/` and `frontend/`:
-```env
-# Backend .env
-PORT=5000
-MONGODB_URI=your_mongodb_connection_string
-REDIS_URL=your_redis_connection_string
-SESSION_SECRET=your_secret_key
-EMAIL_USER=your_email@gmail.com
-GMAIL_CLIENT_ID=your_gmail_client_id
-GMAIL_CLIENT_SECRET=your_gmail_client_secret
-GMAIL_REFRESH_TOKEN=your_gmail_refresh_token
-```
+### 2. Add Environment Variables
+Create `.env` files in both `backend` and `frontend` folders using the `.env.example` templates.
 
-### 3. Run Locally
+### 3. Start Development Servers
 ```bash
-# Run Backend (Port 5000)
+# Start backend server (Port 5000)
 cd backend && npm run dev
 
-# Run Frontend (Port 5173)
+# Start frontend app (Port 5173)
 cd ../frontend && npm run dev
 ```
 
-### 4. Run Test Suite
+### 4. Run Tests
 ```bash
 cd backend && npm test
-```
-
-### 5. Production Build
-```bash
-# Build optimized frontend bundle
-cd frontend && npm run build
 ```

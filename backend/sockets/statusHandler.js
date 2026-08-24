@@ -17,10 +17,7 @@ export const registerStatusHandlers = async (io, socket) => {
             }
         });
 
-        // 2. Flush any in-flight Redis messages to MongoDB so they are caught in the query
-        await flushRedisToMongo().catch(() => {});
-
-        // 3. Fetch missing elements from MongoDB
+        // 2. Fetch missing elements from MongoDB
         const missedMessages = await Message.find({ 
             recipient: userId, 
             status: 'sent' 
