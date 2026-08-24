@@ -1,5 +1,6 @@
 import { createContext, useContext, useEffect, useMemo, useState } from 'react'
 import { getSessionUser, logout } from '../services/authService'
+import { disconnectSocket } from '../services/socketService'
 
 const AuthContext = createContext(undefined)
 
@@ -25,6 +26,7 @@ function AuthProvider({ children }) {
   }, [])
 
   const signOut = async () => {
+    disconnectSocket()
     await logout()
     setUser(null)
   }

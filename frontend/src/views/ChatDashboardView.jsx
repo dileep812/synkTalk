@@ -6,16 +6,10 @@ import PendingRequestsTab from '../components/PendingRequestsTab';
 import GlobalSearchTab from '../components/GlobalSearchTab';
 import ProfileSettingsTab from '../components/ProfileSettingsTab';
 import { useDashboardConnections } from '../hooks/useDashboardConnections';
-import { io } from 'socket.io-client';
-
-const SOCKET_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000';
+import { getSocket } from '../services/socketService';
 
 function ChatDashboardView({ user, onLogout, isSubmitting }) {
-  const [socket] = useState(() => io(SOCKET_URL, {
-    withCredentials: true,
-    autoConnect: true,
-    transports: ['websocket', 'polling']
-  }));
+  const socket = getSocket();
   const [currentView, setCurrentView] = useState('messages');
   const [hasUnread, setHasUnread] = useState(false);
 
@@ -48,7 +42,7 @@ function ChatDashboardView({ user, onLogout, isSubmitting }) {
 
   // Establish persistent socket event listeners on mount
   useEffect(() => {
-    const handleReceived = (message) => {
+    const handleReceived = () => {
       if (currentViewRef.current !== 'messages') {
         setHasUnread(true);
       }

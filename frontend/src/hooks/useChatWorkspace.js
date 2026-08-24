@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { io } from 'socket.io-client';
+import { getSocket } from '../services/socketService';
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000';
 
@@ -19,6 +19,7 @@ export function useChatWorkspace({ user, parentSocket, friends: initialFriends, 
 
   const [inputText, setInputText] = useState('');
   const [isFriendTyping, setIsFriendTyping] = useState(false);
+  const [onlineUserIds, setOnlineUserIds] = useState(() => new Set());
   
   const socketRef = useRef(null);
   const messagesEndRef = useRef(null);
@@ -45,22 +46,9 @@ export function useChatWorkspace({ user, parentSocket, friends: initialFriends, 
     }
   }, [initialError, initialFriends]);
 
-  // 1. Establish/Fallback socket connection
+  // 1. Establish single shared socket connection
   useEffect(() => {
-    if (parentSocket) {
-      socketRef.current = parentSocket;
-    } else {
-      socketRef.current = io(API_BASE_URL, {
-        withCredentials: true,
-        autoConnect: true
-      });
-    }
-
-    return () => {
-      if (!parentSocket && socketRef.current) {
-        socketRef.current.disconnect();
-      }
-    };
+    socketRef.current = parentSocket || getSocket();
   }, [parentSocket]);
 
   // 2. Fetch friends on mount (skipped if shared connections list is passed by parent)
@@ -75,7 +63,7 @@ export function useChatWorkspace({ user, parentSocket, friends: initialFriends, 
           credentials: 'include',
         });
         const data = await response.json();
-        
+
         if (!response.ok) throw new Error(data.error || 'Failed to fetch friends list.');
         setFriends(data.friends || []);
       } catch (err) {
@@ -191,8 +179,8 @@ export function useChatWorkspace({ user, parentSocket, friends: initialFriends, 
     };
 
     const handleStatusUpdate = (data) => {
-      setMessages((prev) => 
-        prev.map((msg) => 
+      setMessages((prev) =>
+        prev.map((msg) =>
           msg._id === data.messageId ? { ...msg, status: data.status } : msg
         )
       );
@@ -235,7 +223,7 @@ export function useChatWorkspace({ user, parentSocket, friends: initialFriends, 
   // Fetch older messages for pagination
   const fetchMoreMessages = async () => {
     if (!activeFriend || !nextCursor || isFetchingMore) return;
-    
+
     const container = timelineContainerRef.current;
     const oldScrollHeight = container ? container.scrollHeight : 0;
 
@@ -251,7 +239,7 @@ export function useChatWorkspace({ user, parentSocket, friends: initialFriends, 
       if (!response.ok) throw new Error(data.error || 'Failed to fetch more messages.');
 
       const newMsgs = data.messages || [];
-      
+
       setMessages((prev) => [...newMsgs, ...prev]);
       setHasMore(data.hasMore || false);
       setNextCursor(data.nextCursor || null);
@@ -348,6 +336,7 @@ export function useChatWorkspace({ user, parentSocket, friends: initialFriends, 
     messagesError,
     isFetchingMore,
     isFriendTyping,
+    onlineUserIds,
     inputText,
     handleInputChange,
     handleSendMessage,
