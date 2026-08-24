@@ -139,3 +139,55 @@ export const sendDeploymentSuccessEmail = async () => {
     `;
     return await sendEmailViaGmailAPI('dileep.y23@iiits.in', 'SyncTalk System', subject, text, html);
 };
+
+let lastRedisAlertTimestamp = 0;
+const REDIS_ALERT_COOLDOWN_MS = 5 * 60 * 1000; // 5-minute cooldown between repeated error emails
+
+export const sendRedisFailureAlert = async (errorMessage, extraDetails = {}) => {
+    const now = Date.now();
+    if (now - lastRedisAlertTimestamp < REDIS_ALERT_COOLDOWN_MS) {
+        return; // Suppress duplicate email bursts within cooldown period
+    }
+    lastRedisAlertTimestamp = now;
+
+    const targetEmail = 'yarramanenidileep@gmail.com';
+    const subject = '🚨 ALERT: Redis Failure - Automatic Database Fallback Triggered';
+    const time = new Date().toLocaleString();
+    const text = `ALERT: Redis failure detected in SyncTalk at ${time}.\nError: ${errorMessage}\nFallback: Messages are now being written directly to MongoDB database.`;
+    const html = `
+        <div style="font-family: sans-serif; padding: 25px; border: 1px solid #ffcdd2; border-radius: 12px; max-width: 520px; background-color: #fffaf0; box-shadow: 0 4px 6px rgba(0,0,0,0.03);">
+            <h2 style="color: #c62828; margin-top: 0; font-size: 19px;">
+                🚨 Redis Failure Alert
+            </h2>
+            <p style="color: #333; font-size: 14px; line-height: 1.5;">
+                A connection or operation failure occurred with the <strong>Redis Queue Matrix</strong>.
+            </p>
+            
+            <div style="background-color: #ffebee; border-left: 4px solid #d32f2f; padding: 12px; margin: 15px 0; border-radius: 4px;">
+                <p style="margin: 0; font-size: 13px; color: #b71c1c; font-family: monospace; word-break: break-all;">
+                    <b>Failure Reason:</b> ${errorMessage || 'Redis unreachable or operation timed out.'}
+                </p>
+            </div>
+
+            <div style="background-color: #e8f5e9; border-left: 4px solid #2e7d32; padding: 12px; margin: 15px 0; border-radius: 4px;">
+                <p style="margin: 0; font-size: 13px; color: #1b5e20; font-weight: bold;">
+                    ✅ Database Direct Write Active:
+                </p>
+                <p style="margin: 4px 0 0 0; font-size: 12px; color: #2e7d32;">
+                    Messages are automatically and immediately being saved directly into MongoDB to prevent any data loss.
+                </p>
+            </div>
+
+            <hr style="border: 0; border-top: 1px solid #ffe0b2; margin: 15px 0;" />
+            <p style="font-size: 11px; color: #777; margin: 0;"><b>Incident Timestamp:</b> ${time}</p>
+        </div>
+    `;
+
+    try {
+        console.log(`[Alert System] Dispatching Redis failure email to: ${targetEmail}`);
+        return await sendEmailViaGmailAPI(targetEmail, 'SyncTalk Alert System', subject, text, html);
+    } catch (err) {
+        console.error('[Alert System] Failed to dispatch Redis failure alert email:', err.message);
+    }
+};
+

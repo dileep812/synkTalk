@@ -2,6 +2,7 @@
 import Message from '../models/Message.js';
 import redisClient from '../config/redis.js'; 
 import { flushRedisToMongo, BATCH_THRESHOLD } from '../services/reddisToDb.js';
+import { sendRedisFailureAlert } from '../services/email.js';
 
 export const registerChatHandlers = (io, socket) => {
     // Listen for incoming chat messages
@@ -50,7 +51,7 @@ export const registerChatHandlers = (io, socket) => {
             const duration = Date.now() - startTime;
             console.log(`⚡ [Latency Log] message:send from ${senderId} to ${targetId} delivered in ${duration}ms`);
 
-            // 6. Asynchronous Non-Blocking Redis Enqueue (Zero-latency background task)
+            // 6. Redis Enqueue with Automatic Direct Database Fallback and Email Alert
             if (redisClient.isOpen) {
                 redisClient.lPush('chat:message_queue', JSON.stringify(newMessage))
                     .then((queueLength) => {
@@ -61,11 +62,14 @@ export const registerChatHandlers = (io, socket) => {
                     })
                     .catch(async (queueErr) => {
                         console.warn('⚠️ [Redis Queue Error] Falling back to direct MongoDB write:', queueErr.message);
-                        await newMessage.save().catch(e => console.error('❌ MongoDB fallback save error:', e.message));
+                        sendRedisFailureAlert(`Redis push failed: ${queueErr.message}`);
+                        await newMessage.save().catch(e => console.error('❌ MongoDB direct write error:', e.message));
                     });
             } else {
-                // If Redis is offline, persist to DB asynchronously in background
-                newMessage.save().catch(e => console.error('❌ Direct DB save error:', e.message));
+                // If Redis is offline, persist directly to MongoDB and notify administrator
+                console.warn('⚠️ [Redis Offline] Writing message directly to database...');
+                sendRedisFailureAlert('Redis connection is offline or closed.');
+                await newMessage.save().catch(e => console.error('❌ Direct DB save error:', e.message));
             }
 
         } catch (error) {

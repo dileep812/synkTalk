@@ -1,4 +1,5 @@
 import { createClient } from 'redis';
+import { sendRedisFailureAlert } from '../services/email.js';
 
 const redisClient = createClient({
     url: process.env.REDIS_URL,
@@ -9,9 +10,18 @@ const redisClient = createClient({
     }
 });
 
-redisClient.on('error', (err) => console.error('❌ Redis Client Error:', err));
+redisClient.on('error', (err) => {
+    console.error('❌ Redis Client Error:', err?.message || err);
+    sendRedisFailureAlert(`Redis client error: ${err?.message || 'Connection lost'}`);
+});
+
 redisClient.on('connect', () => console.log('🚀 Connected to Redis Queue Matrix successfully'));
 
-await redisClient.connect();
+try {
+    await redisClient.connect();
+} catch (err) {
+    console.error('⚠️ Initial Redis connection failed. Operating in MongoDB Direct-Write mode:', err.message);
+    sendRedisFailureAlert(`Initial Redis connection failed: ${err.message}`);
+}
 
-export default redisClient;
+export default redisClient;
