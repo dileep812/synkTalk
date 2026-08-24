@@ -1,5 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import Sidebar from '../components/Sidebar';
+import MobileHeader from '../components/MobileHeader';
+import MobileBottomNav from '../components/MobileBottomNav';
 import ChatWorkspace from '../components/ChatWorkspace';
 import ConnectionsTab from '../components/ConnectionsTab';
 import PendingRequestsTab from '../components/PendingRequestsTab';
@@ -56,13 +58,22 @@ function ChatDashboardView({ user, onLogout, isSubmitting }) {
   }, [socket]);
 
   return (
-    <div className="flex h-screen w-screen overflow-hidden bg-slate-100">
-      {/* Persistent Left Sidebar */}
+    <div className="flex h-screen w-screen overflow-hidden bg-slate-100 flex-col md:flex-row">
+      {/* Desktop Left Sidebar */}
       <Sidebar
         currentView={currentView}
         setCurrentView={setCurrentView}
         hasUnread={hasUnread}
         pendingCount={pendingCount}
+        user={user}
+        onLogout={onLogout}
+        isSubmitting={isSubmitting}
+      />
+
+      {/* Mobile Top Header (hidden on desktop) */}
+      <MobileHeader
+        currentView={currentView}
+        setCurrentView={setCurrentView}
         user={user}
         onLogout={onLogout}
         isSubmitting={isSubmitting}
@@ -79,20 +90,22 @@ function ChatDashboardView({ user, onLogout, isSubmitting }) {
             friendsError={error}
           />
         ) : currentView === 'settings' ? (
-          <ProfileSettingsTab />
+          <div className="flex-1 overflow-y-auto p-3 sm:p-8 bg-slate-50">
+            <ProfileSettingsTab />
+          </div>
         ) : (
-          <div className="flex-1 overflow-y-auto p-4 sm:p-8 bg-slate-50">
+          <div className="flex-1 overflow-y-auto p-3 sm:p-8 bg-slate-50">
             <main className="mx-auto w-full max-w-5xl">
-              <section className="rounded-[2rem] border border-slate-200 bg-white p-6 shadow-xl backdrop-blur-xl sm:p-8">
+              <section className="rounded-2xl md:rounded-[2rem] border border-slate-200 bg-white p-4 sm:p-8 shadow-md sm:shadow-xl">
                 {/* Dynamic Page Header */}
-                <header className="flex flex-col gap-2 border-b border-slate-200 pb-6 mb-6">
-                  <p className="text-xs font-bold uppercase tracking-[0.2em] text-cyan-700">
+                <header className="flex flex-col gap-1.5 sm:gap-2 border-b border-slate-200 pb-4 sm:pb-6 mb-4 sm:mb-6">
+                  <p className="text-[11px] sm:text-xs font-bold uppercase tracking-[0.2em] text-cyan-700">
                     {currentView === 'search' ? 'Directory Search' : currentView === 'requests' ? 'Network Invitations' : 'Connections Workspace'}
                   </p>
-                  <h1 className="text-2xl font-bold text-slate-900" style={{ fontFamily: 'Sora, sans-serif' }}>
+                  <h1 className="text-xl sm:text-2xl font-bold text-slate-900" style={{ fontFamily: 'Sora, sans-serif' }}>
                     {currentView === 'search' ? 'Global Directory Search' : currentView === 'requests' ? 'Pending Network Invites' : 'My Network Connections'}
                   </h1>
-                  <p className="text-sm text-slate-500 font-medium">
+                  <p className="text-xs sm:text-sm text-slate-500 font-medium">
                     {currentView === 'search' && 'Search and connect with other SyncTalk users globally.'}
                     {currentView === 'requests' && 'Accept or decline pending incoming invitations.'}
                     {currentView === 'connections' && 'Interact, chat, or manage your established connections.'}
@@ -150,8 +163,17 @@ function ChatDashboardView({ user, onLogout, isSubmitting }) {
           </div>
         )}
       </div>
+
+      {/* Mobile Bottom Navigation Bar (hidden on desktop) */}
+      <MobileBottomNav
+        currentView={currentView}
+        setCurrentView={setCurrentView}
+        hasUnread={hasUnread}
+        pendingCount={pendingCount}
+      />
     </div>
   );
 }
 
 export default ChatDashboardView;
+

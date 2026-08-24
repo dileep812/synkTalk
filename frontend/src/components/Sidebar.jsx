@@ -3,7 +3,7 @@ import { MessageSquare, Users, LogOut, MessageCircle, User, Search, Inbox } from
 
 function Sidebar({ currentView, setCurrentView, hasUnread, pendingCount, user, onLogout, isSubmitting }) {
   return (
-    <aside className="w-64 bg-slate-900 text-slate-100 flex flex-col h-screen border-r border-slate-800 shrink-0">
+    <aside className="hidden md:flex w-64 bg-slate-900 text-slate-100 flex-col h-screen border-r border-slate-800 shrink-0">
       {/* Brand Logo Header */}
       <div className="p-6 border-b border-slate-800 flex items-center gap-3">
         <div className="h-10 w-10 rounded-xl bg-gradient-to-tr from-cyan-500 to-blue-600 flex items-center justify-center text-white font-bold text-xl shadow-lg shadow-cyan-500/20">

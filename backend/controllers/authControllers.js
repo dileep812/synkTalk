@@ -1,6 +1,7 @@
 // backend/controllers/authController.js
 import User from '../models/user.js';
 import { sendEmailOTP } from '../services/email.js'; 
+import { getIO } from '../io.js'; 
 
 const generateOtpId = () => {
     const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // Clean set omitting 0, O, I, 1
@@ -87,6 +88,9 @@ export const requestOtp = async (req, res) => {
             username: userProfile.username,
             profileImage: userProfile.profileImage
         };
+        req.session.ip = req.headers['x-forwarded-for'] || req.socket?.remoteAddress || req.ip || 'Unknown';
+        req.session.userAgent = req.headers['user-agent'] || 'Unknown';
+        req.session.loginTime = new Date();
 
         // 🌟 4. Wipe out the single-use OTP data structure out of the session vault
         delete req.session.otpData;
@@ -105,9 +109,23 @@ export const getMe = (req, res) => {
    
 };
 
+import { getIO } from '../io.js';
+
 export const logout = (req, res) => {
     const username = req.session?.user?.username || 'Unknown User';
+    const userId = (req.session?.user?.id || req.session?.user?._id)?.toString();
     console.log(`[Auth Controller | logout] Terminating session for User: ${username}`);
+
+    if (userId) {
+        try {
+            const io = getIO();
+            io.in(userId).emit('auth:revoked');
+            io.in(userId).disconnectSockets(true);
+        } catch (e) {
+            console.warn('[Auth Controller | logout] Could not disconnect sockets:', e?.message);
+        }
+    }
+
     req.session.destroy((err) => {
         if (err) {
             console.error(`[Auth Controller | logout] Session destruction failed for User: ${username}. Error:`, err);
