@@ -18,6 +18,7 @@ function ChatWorkspace({ user, parentSocket, friends, friendsLoading: parentLoad
     messagesError,
     isFetchingMore,
     isFriendTyping,
+    onlineUserIds,
     inputText,
     handleInputChange,
     handleSendMessage,
@@ -42,6 +43,7 @@ function ChatWorkspace({ user, parentSocket, friends, friendsLoading: parentLoad
         filteredFriends={filteredFriends}
         activeFriend={activeFriend}
         setActiveFriend={setActiveFriend}
+        onlineUserIds={onlineUserIds}
       />
       {activeFriend ? (
         <ChatArea
@@ -53,6 +55,7 @@ function ChatWorkspace({ user, parentSocket, friends, friendsLoading: parentLoad
           messagesError={messagesError}
           isFetchingMore={isFetchingMore}
           isFriendTyping={isFriendTyping}
+          onlineUserIds={onlineUserIds}
           inputText={inputText}
           handleInputChange={handleInputChange}
           handleSendMessage={handleSendMessage}

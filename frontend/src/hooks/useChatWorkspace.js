@@ -196,11 +196,44 @@ export function useChatWorkspace({ user, parentSocket, friends: initialFriends, 
       }
     };
 
+    const handleOnlineList = (userIds) => {
+      if (Array.isArray(userIds)) {
+        setOnlineUserIds(new Set(userIds.map((id) => id.toString())));
+      }
+    };
+
+    const handleUserOnline = (data) => {
+      if (data?.userId) {
+        setOnlineUserIds((prev) => new Set([...prev, data.userId.toString()]));
+      }
+    };
+
+    const handleUserOffline = (data) => {
+      if (data?.userId) {
+        setOnlineUserIds((prev) => {
+          const next = new Set(prev);
+          next.delete(data.userId.toString());
+          return next;
+        });
+      }
+    };
+
+    const handleConnect = () => {
+      socketRef.current?.emit('users:get_online');
+    };
+
     socketRef.current.on('message:received', handleMessageReceived);
     socketRef.current.on('message:sent', handleMessageSent);
     socketRef.current.on('chat:typing_status', handleTypingStatus);
     socketRef.current.on('message:status_update', handleStatusUpdate);
     socketRef.current.on('messages:marked_read', handleMessagesMarkedRead);
+    socketRef.current.on('users:online_list', handleOnlineList);
+    socketRef.current.on('user:online', handleUserOnline);
+    socketRef.current.on('user:offline', handleUserOffline);
+    socketRef.current.on('connect', handleConnect);
+
+    // Immediately request current online users list from server
+    socketRef.current.emit('users:get_online');
 
     return () => {
       if (socketRef.current) {
@@ -209,6 +242,10 @@ export function useChatWorkspace({ user, parentSocket, friends: initialFriends, 
         socketRef.current.off('chat:typing_status', handleTypingStatus);
         socketRef.current.off('message:status_update', handleStatusUpdate);
         socketRef.current.off('messages:marked_read', handleMessagesMarkedRead);
+        socketRef.current.off('users:online_list', handleOnlineList);
+        socketRef.current.off('user:online', handleUserOnline);
+        socketRef.current.off('user:offline', handleUserOffline);
+        socketRef.current.off('connect', handleConnect);
       }
     };
   }, [activeFriend]);

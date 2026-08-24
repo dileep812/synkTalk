@@ -1,13 +1,26 @@
 import Message from '../models/Message.js';
-import { flushRedisToMongo } from '../services/reddisToDb.js';
+import { flushRedisToMongo, updateRedisMessagesStatus, markDeliveredForRecipientInRedis } from '../services/reddisToDb.js';
 
 export const registerStatusHandlers = async (io, socket) => {
     const userId = (socket.user.id || socket.user._id).toString();
     try {
-        // Flush any in-flight Redis messages to MongoDB first so they are caught in the query
+        // 1. Mark in-flight Redis messages as 'delivered' for connecting user
+        const redisDelivered = await markDeliveredForRecipientInRedis(userId);
+        redisDelivered.forEach((msg) => {
+            const senderId = (msg.sender?._id || msg.sender)?.toString();
+            if (senderId) {
+                io.to(senderId).emit('message:status_update', {
+                    messageId: msg._id,
+                    status: 'delivered',
+                    recipientId: userId
+                });
+            }
+        });
+
+        // 2. Flush any in-flight Redis messages to MongoDB so they are caught in the query
         await flushRedisToMongo().catch(() => {});
 
-        // Fetch missing elements using .lean() to allow safe local property modification
+        // 3. Fetch missing elements from MongoDB
         const missedMessages = await Message.find({ 
             recipient: userId, 
             status: 'sent' 
@@ -51,6 +64,10 @@ export const registerStatusHandlers = async (io, socket) => {
         }
 
         try {
+            // 1. Update in-flight messages in Redis queue
+            const redisUpdated = await updateRedisMessagesStatus(chatWithUserId, currentUserId, 'read');
+
+            // 2. Update persisted messages in MongoDB
             const dbResult = await Message.updateMany(
                 { 
                     sender: chatWithUserId, 
@@ -62,14 +79,13 @@ export const registerStatusHandlers = async (io, socket) => {
                 }
             );
 
-            if (dbResult.modifiedCount > 0) {
-                io.to(chatWithUserId.toString()).emit('messages:marked_read', {
-                    readerId: currentUserId
-                });
+            // 3. Broadcast read acknowledgment to sender
+            io.to(chatWithUserId.toString()).emit('messages:marked_read', {
+                readerId: currentUserId
+            });
 
-                const duration = Date.now() - startTime;
-                console.log(`[Latency Log] Read receipt processed in ${duration}ms for ${dbResult.modifiedCount} messages`);
-            }
+            const duration = Date.now() - startTime;
+            console.log(`[Latency Log] Read receipt processed in ${duration}ms (DB: ${dbResult.modifiedCount}, Redis: ${redisUpdated})`);
 
         } catch (error) {
             const duration = Date.now() - startTime;

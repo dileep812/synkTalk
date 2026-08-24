@@ -10,6 +10,7 @@ function ChatArea({
   messagesError,
   isFetchingMore,
   isFriendTyping,
+  onlineUserIds,
   inputText,
   handleInputChange,
   handleSendMessage,
@@ -17,6 +18,9 @@ function ChatArea({
   handleScroll,
   messagesEndRef
 }) {
+  const activeFriendId = (activeFriend?._id || activeFriend?.id)?.toString();
+  const isOnline = onlineUserIds ? onlineUserIds.has(activeFriendId) : false;
+
   return (
     <div className={`flex-1 flex flex-col h-full bg-slate-50 ${!activeFriend ? 'hidden md:flex' : 'flex'}`}>
       {/* Active Header */}
@@ -28,20 +32,32 @@ function ChatArea({
           >
             <ArrowLeft className="h-5 w-5" />
           </button>
-          <img
-            src={activeFriend.profileImage || '/placeholder-avatar.png'}
-            alt={`${activeFriend.username} avatar`}
-            className="h-10 w-10 rounded-xl object-cover border border-slate-100"
-          />
+          <div className="relative shrink-0">
+            <img
+              src={activeFriend.profileImage || '/placeholder-avatar.png'}
+              alt={`${activeFriend.username} avatar`}
+              className="h-10 w-10 rounded-xl object-cover border border-slate-100"
+            />
+            <span
+              className={`absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full border-2 border-white transition-colors duration-200 ${
+                isOnline ? 'bg-emerald-500 shadow-sm' : 'bg-slate-300'
+              }`}
+            />
+          </div>
           <div>
             <h3 className="font-bold text-slate-800 text-sm leading-tight">
               {activeFriend.username}
             </h3>
-            <p className="text-[11px] text-slate-400">
+            <p className="text-[11px] leading-tight">
               {isFriendTyping ? (
                 <span className="text-cyan-600 font-semibold animate-pulse">Typing...</span>
+              ) : isOnline ? (
+                <span className="text-emerald-600 font-semibold flex items-center gap-1.5">
+                  <span className="h-2 w-2 rounded-full bg-emerald-500 inline-block animate-pulse"></span>
+                  Active Now
+                </span>
               ) : (
-                "Active Session Chat"
+                <span className="text-slate-400 font-medium">Offline</span>
               )}
             </p>
           </div>

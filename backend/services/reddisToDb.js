@@ -85,6 +85,72 @@ export async function getPendingRedisMessages(userId1, userId2) {
 }
 
 /**
+ * Updates status of messages in Redis queue matching sender and recipient (e.g. marking as 'read').
+ */
+export async function updateRedisMessagesStatus(senderId, recipientId, newStatus) {
+    if (!redisClient?.isOpen) return 0;
+    try {
+        const rawList = await redisClient.lRange('chat:message_queue', 0, -1);
+        if (!rawList || rawList.length === 0) return 0;
+
+        const sId = senderId.toString();
+        const rId = recipientId.toString();
+        let modified = 0;
+
+        for (let i = 0; i < rawList.length; i++) {
+            try {
+                const msg = typeof rawList[i] === 'string' ? JSON.parse(rawList[i]) : rawList[i];
+                if (!msg) continue;
+                const msgSender = (msg.sender?._id || msg.sender)?.toString();
+                const msgRecipient = (msg.recipient?._id || msg.recipient)?.toString();
+
+                if (msgSender === sId && msgRecipient === rId && msg.status !== newStatus) {
+                    msg.status = newStatus;
+                    await redisClient.lSet('chat:message_queue', i, JSON.stringify(msg));
+                    modified++;
+                }
+            } catch {}
+        }
+        return modified;
+    } catch (err) {
+        console.warn('⚠️ [Redis] updateRedisMessagesStatus error:', err.message);
+        return 0;
+    }
+}
+
+/**
+ * Updates status of in-flight messages in Redis from 'sent' to 'delivered' when recipient connects.
+ */
+export async function markDeliveredForRecipientInRedis(recipientId) {
+    if (!redisClient?.isOpen) return [];
+    try {
+        const rawList = await redisClient.lRange('chat:message_queue', 0, -1);
+        if (!rawList || rawList.length === 0) return [];
+
+        const rId = recipientId.toString();
+        const updated = [];
+
+        for (let i = 0; i < rawList.length; i++) {
+            try {
+                const msg = typeof rawList[i] === 'string' ? JSON.parse(rawList[i]) : rawList[i];
+                if (!msg) continue;
+                const msgRecipient = (msg.recipient?._id || msg.recipient)?.toString();
+
+                if (msgRecipient === rId && msg.status === 'sent') {
+                    msg.status = 'delivered';
+                    await redisClient.lSet('chat:message_queue', i, JSON.stringify(msg));
+                    updated.push(msg);
+                }
+            } catch {}
+        }
+        return updated;
+    } catch (err) {
+        console.warn('⚠️ [Redis] markDeliveredForRecipientInRedis error:', err.message);
+        return [];
+    }
+}
+
+/**
  * Initializes Redis sync on server start (drains queue if already >= 100, otherwise keeps in Redis).
  */
 export async function startRedisToMongoSync() {
@@ -100,3 +166,4 @@ export async function startRedisToMongoSync() {
         console.warn('[Redis] Startup queue check warning:', err.message);
     }
 }
+

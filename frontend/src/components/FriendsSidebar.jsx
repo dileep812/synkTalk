@@ -8,7 +8,8 @@ function FriendsSidebar({
   setSearchTerm,
   filteredFriends,
   activeFriend,
-  setActiveFriend
+  setActiveFriend,
+  onlineUserIds
 }) {
   return (
     <div className={`w-80 border-r border-slate-200 bg-white flex flex-col shrink-0 ${activeFriend ? 'hidden md:flex' : 'flex w-full md:w-80'}`}>
@@ -50,6 +51,9 @@ function FriendsSidebar({
         ) : (
           filteredFriends.map((friend) => {
             const isActive = activeFriend?._id === friend._id;
+            const friendId = (friend._id || friend.id)?.toString();
+            const isOnline = onlineUserIds ? onlineUserIds.has(friendId) : false;
+
             return (
               <button
                 key={friend._id}
@@ -60,19 +64,37 @@ function FriendsSidebar({
                     : 'hover:bg-slate-50 border-l-4 border-transparent'
                 }`}
               >
-                <img
-                  src={friend.profileImage || '/placeholder-avatar.png'}
-                  alt={`${friend.username} avatar`}
-                  className="h-12 w-12 rounded-xl object-cover border border-slate-200"
-                />
+                <div className="relative shrink-0">
+                  <img
+                    src={friend.profileImage || '/placeholder-avatar.png'}
+                    alt={`${friend.username} avatar`}
+                    className="h-12 w-12 rounded-xl object-cover border border-slate-200"
+                  />
+                  <span
+                    className={`absolute -bottom-0.5 -right-0.5 h-3.5 w-3.5 rounded-full border-2 border-white transition-colors duration-200 ${
+                      isOnline ? 'bg-emerald-500 shadow-sm' : 'bg-slate-300'
+                    }`}
+                  />
+                </div>
+
                 <div className="flex-1 min-w-0">
-                  <p className="font-semibold text-slate-800 truncate text-sm">
-                    {friend.username}
-                  </p>
+                  <div className="flex items-center justify-between gap-1 mb-0.5">
+                    <p className="font-semibold text-slate-800 truncate text-sm">
+                      {friend.username}
+                    </p>
+                    <span
+                      className={`text-[10px] font-semibold shrink-0 transition-colors duration-200 ${
+                        isOnline ? 'text-emerald-600' : 'text-slate-400'
+                      }`}
+                    >
+                      {isOnline ? 'Active' : 'Offline'}
+                    </span>
+                  </div>
                   <p className="text-xs text-slate-500 truncate">
                     {friend.email}
                   </p>
                 </div>
+
                 {friend.unreadCount > 0 && (
                   <span className="shrink-0 min-w-[20px] h-[20px] px-1.5 flex items-center justify-center text-[10px] font-bold text-white bg-cyan-600 rounded-full select-none shadow-sm">
                     {friend.unreadCount > 9 ? '9+' : friend.unreadCount}
