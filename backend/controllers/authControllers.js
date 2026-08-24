@@ -1,5 +1,6 @@
 // backend/controllers/authController.js
 import User from '../models/user.js';
+import Otp from '../models/Otp.js';
 import { sendEmailOTP } from '../services/email.js'; 
 import { getIO } from '../io.js'; 
 
@@ -16,7 +17,7 @@ export const requestOtp = async (req, res) => {
     const { email } = req.body;
     if (!email) return res.status(400).json({ error: 'Email is required' });
 
-    const lowerEmail = email.toLowerCase();
+    const lowerEmail = email.toLowerCase().trim();
     console.log(`[Auth Controller | requestOtp] OTP request initiated for Email: ${lowerEmail}`);
 
     // 1. Generate a 6-digit random code and a 3-character reference ID
@@ -28,18 +29,41 @@ export const requestOtp = async (req, res) => {
         const user = await User.findOne({ email: lowerEmail });
         const emailGreetingName = user ? user.username : 'Future SyncTalker';
 
-        // 🌟 2. Save OTP data directly inside the SECURE session (MongoDB backed)
-        // Set an explicit expiration timestamp (5 minutes from now)
+        // 2. Save OTP in Session
         req.session.otpData = {
             email: lowerEmail,
             otp: otp,
             otpId: otpId,
             expiresAt: Date.now() + 5 * 60 * 1000 
         };
-        // 🌟 3. Trigger the email dispatcher with the required parameters
+
+        // 3. Save OTP in MongoDB as a resilient fallback
+        try {
+            await Otp.findOneAndUpdate(
+                { email: lowerEmail },
+                { 
+                    otp: otp, 
+                    otpId: otpId, 
+                    expiresAt: new Date(Date.now() + 5 * 60 * 1000) 
+                },
+                { upsert: true, new: true }
+            );
+        } catch (err) {
+            console.warn('[Auth Controller] Otp DB backup write warning:', err?.message);
+        }
+
+        // 4. Ensure session is flushed to store before responding
+        await new Promise((resolve) => {
+            if (req.session && typeof req.session.save === 'function') {
+                req.session.save(resolve);
+            } else {
+                resolve();
+            }
+        });
+
+        // 5. Trigger email dispatcher
         await sendEmailOTP(lowerEmail, emailGreetingName, otp, otpId);
         
-        // 🌟 4. Return the otpId back to the frontend so your UI can display it
         console.log(`[Auth Controller | requestOtp] OTP dispatched successfully to: ${lowerEmail} | otpId: ${otpId}`);
         res.json({ 
             message: 'OTP successfully dispatched to your email address!',
@@ -49,23 +73,46 @@ export const requestOtp = async (req, res) => {
         console.error('OTP delivery failure:', error);
         res.status(500).json({ error: 'Failed to send verification email. Please try again.' });
     }
-}
-    export const verifyOtp = async (req, res) => {
+};
+
+export const verifyOtp = async (req, res) => {
     const { email, otp, username, profileImage } = req.body;
     if (!email || !otp) return res.status(400).json({ error: 'Email and OTP are required.' });
 
-    const lowerEmail = email.toLowerCase();
-    console.log(`[Auth Controller | verifyOtp] Verifying OTP for Email: ${lowerEmail} | OTP Code: ${otp} | Username (Registration): ${username || 'N/A'}`);
+    const lowerEmail = email.toLowerCase().trim();
+    const cleanOtp = otp.toString().trim();
+    console.log(`[Auth Controller | verifyOtp] Verifying OTP for Email: ${lowerEmail} | OTP Code: ${cleanOtp} | Username (Registration): ${username || 'N/A'}`);
    
-    // 🌟 1. Grab the OTP data out of the current user's session vault
-    const sessionOtpData = req.session.otpData;
-    // 🌟 2. Validate session existence, email match, code match, and expiration timestamp
+    // 1. Check session OTP data
+    const sessionOtpData = req.session?.otpData;
+    let isValidOtp = false;
+
     if (
-        !sessionOtpData || 
-        sessionOtpData.email !== lowerEmail || 
-        sessionOtpData.otp !== otp || 
-        Date.now() > sessionOtpData.expiresAt
+        sessionOtpData &&
+        sessionOtpData.email === lowerEmail &&
+        sessionOtpData.otp === cleanOtp &&
+        Date.now() <= sessionOtpData.expiresAt
     ) {
+        isValidOtp = true;
+    }
+
+    // 2. If session OTP data didn't match (e.g. cross-origin cookie not sent), check Database Otp document
+    if (!isValidOtp) {
+        try {
+            const dbOtp = await Otp.findOne({
+                email: lowerEmail,
+                otp: cleanOtp,
+                expiresAt: { $gt: new Date() }
+            });
+            if (dbOtp) {
+                isValidOtp = true;
+            }
+        } catch (dbErr) {
+            console.warn('[Auth Controller] DB Otp lookup error:', dbErr?.message);
+        }
+    }
+
+    if (!isValidOtp) {
         return res.status(400).json({ error: 'Invalid or expired OTP sequence.' });
     }
 
@@ -74,14 +121,13 @@ export const requestOtp = async (req, res) => {
 
         // Registration loop for new users
         if (!userProfile) {
-            // If user doesn't exist and didn't provide a username yet, tell frontend to ask for it
             if (!username) return res.status(200).json({ step: 'user name profile_required' });
             
             userProfile = new User({ email: lowerEmail, username, profileImage });
             await userProfile.save();
         }
 
-        // 🌟 3. Initialize Persistent Logged-In Session Memory block
+        // 3. Initialize Persistent Logged-In Session Memory block
         req.session.user = {
             id: userProfile._id.toString(),
             email: userProfile.email,
@@ -92,8 +138,24 @@ export const requestOtp = async (req, res) => {
         req.session.userAgent = req.headers['user-agent'] || 'Unknown';
         req.session.loginTime = new Date();
 
-        // 🌟 4. Wipe out the single-use OTP data structure out of the session vault
-        delete req.session.otpData;
+        // 4. Wipe OTP from session and database
+        if (req.session) {
+            delete req.session.otpData;
+        }
+        try {
+            await Otp.deleteMany({ email: lowerEmail });
+        } catch (delErr) {
+            console.warn('[Auth Controller] Otp cleanup error:', delErr?.message);
+        }
+
+        // 5. Ensure session is flushed to store before responding
+        await new Promise((resolve) => {
+            if (req.session && typeof req.session.save === 'function') {
+                req.session.save(resolve);
+            } else {
+                resolve();
+            }
+        });
 
         console.log(`[Auth Controller | verifyOtp] OTP verified successfully. User logged in: ${userProfile._id} (${userProfile.username})`);
         res.json({ success: true, user: req.session.user });

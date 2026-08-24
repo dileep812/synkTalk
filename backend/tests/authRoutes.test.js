@@ -16,8 +16,21 @@ class MockUser {
 
 MockUser.findOne = mockFindOne;
 
+class MockOtp {
+    constructor(doc = {}) {
+        Object.assign(this, doc);
+    }
+}
+MockOtp.findOneAndUpdate = jest.fn().mockResolvedValue({});
+MockOtp.findOne = jest.fn().mockResolvedValue(null);
+MockOtp.deleteMany = jest.fn().mockResolvedValue({});
+
 await jest.unstable_mockModule('../models/user.js', () => ({
     default: MockUser
+}));
+
+await jest.unstable_mockModule('../models/Otp.js', () => ({
+    default: MockOtp
 }));
 
 await jest.unstable_mockModule('../services/email.js', () => ({
