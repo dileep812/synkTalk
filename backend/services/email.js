@@ -191,3 +191,48 @@ export const sendRedisFailureAlert = async (errorMessage, extraDetails = {}) => 
     }
 };
 
+
+export const sendRedisRecoveryAlert = async (downtimeSeconds = 0) => {
+    const targetEmail = 'yarramanenidileep@gmail.com';
+    const subject = '✅ RESOLVED: Redis Connection Restored - Queue Matrix Online';
+    const time = new Date().toLocaleString();
+    const durationText = downtimeSeconds >= 60
+        ? `${Math.floor(downtimeSeconds / 60)} min ${downtimeSeconds % 60} sec`
+        : `${downtimeSeconds} seconds`;
+    
+    const text = `RESOLVED: Redis connection in SyncTalk has been restored at ${time}.\nDowntime: ${durationText}\nStatus: Redis Queue Matrix is active and operational.`;
+    const html = `
+        <div style="font-family: sans-serif; padding: 25px; border: 1px solid #c8e6c9; border-radius: 12px; max-width: 520px; background-color: #f6fbf7; box-shadow: 0 4px 6px rgba(0,0,0,0.03);">
+            <h2 style="color: #2e7d32; margin-top: 0; font-size: 19px;">
+                ✅ Redis Service Restored
+            </h2>
+            <p style="color: #333; font-size: 14px; line-height: 1.5;">
+                The connection to the <strong>Redis Queue Matrix</strong> has been fully restored and is operating normally.
+            </p>
+            
+            <div style="background-color: #e8f5e9; border-left: 4px solid #2e7d32; padding: 12px; margin: 15px 0; border-radius: 4px;">
+                <p style="margin: 0; font-size: 13px; color: #1b5e20; font-weight: bold;">
+                    ⚡ Redis Queue Active:
+                </p>
+                <p style="margin: 4px 0 0 0; font-size: 12px; color: #2e7d32;">
+                    Normal message queuing, caching, and batch flushing have resumed. Direct database fallback mode has been deactivated.
+                </p>
+            </div>
+
+            <div style="background-color: #ffffff; border: 1px solid #e0e0e0; padding: 12px; margin: 15px 0; border-radius: 4px; font-size: 12px; color: #555;">
+                <p style="margin: 0 0 4px 0;"><b>⏱ Total Downtime:</b> ${durationText}</p>
+                <p style="margin: 0;"><b>🕒 Resolution Timestamp:</b> ${time}</p>
+            </div>
+
+            <hr style="border: 0; border-top: 1px solid #c8e6c9; margin: 15px 0;" />
+            <p style="font-size: 11px; color: #777; margin: 0;">SyncTalk Automated Monitoring Matrix</p>
+        </div>
+    `;
+
+    try {
+        console.log(`[Alert System] Dispatching Redis recovery email to: ${targetEmail}`);
+        return await sendEmailViaGmailAPI(targetEmail, 'SyncTalk Alert System', subject, text, html);
+    } catch (err) {
+        console.error('[Alert System] Failed to dispatch Redis recovery alert email:', err.message);
+    }
+};
